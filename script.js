@@ -13,7 +13,7 @@ class QuoteCanvas {
         // New properties for enhanced features
         this.currentTab = 'content-tab';
         this.zoomLevel = 1;
-        this.isDarkTheme = false;
+        this.isDarkTheme = true;
         this.isTouchMode = false;
         this.isGenerating = false;
         this.isPaused = false;
@@ -29,7 +29,7 @@ class QuoteCanvas {
             autoSave: true,
             previewQuality: 'medium',
             touchMode: true,
-            theme: 'light'
+            theme: 'dark'
         };
         
         this.initializeElements();
@@ -612,10 +612,13 @@ class QuoteCanvas {
             const saved = localStorage.getItem('quotecanvas-settings');
             if (saved) {
                 this.settings = { ...this.settings, ...JSON.parse(saved) };
-                this.applySettings();
             }
+            // Always apply settings (either loaded or defaults)
+            this.applySettings();
         } catch (error) {
             console.warn('Failed to load settings:', error);
+            // Apply defaults even if loading failed
+            this.applySettings();
         }
     }
     
@@ -628,11 +631,15 @@ class QuoteCanvas {
     }
     
     applySettings() {
-        // Apply theme
+        // Apply theme (dark is now the default)
         if (this.settings.theme === 'dark') {
             this.isDarkTheme = true;
             document.body.classList.add('dark-theme');
             this.themeToggle.textContent = '☀️';
+        } else {
+            this.isDarkTheme = false;
+            document.body.classList.remove('dark-theme');
+            this.themeToggle.textContent = '🌙';
         }
         
         // Apply touch mode
@@ -652,7 +659,7 @@ class QuoteCanvas {
             autoSave: true,
             previewQuality: 'medium',
             touchMode: true,
-            theme: 'light'
+            theme: 'dark'
         };
         localStorage.removeItem('quotecanvas-settings');
         location.reload(); // Refresh to apply reset
