@@ -44,10 +44,9 @@ Once configured, the workflow will:
 
 1. **Trigger**: Automatically run when you push to the `main` branch
 2. **Build**: Create multi-architecture Docker images (AMD64 + ARM64)
-3. **Tag**: Create multiple tags:
-   - `joewalters/quotecanvas:latest` (for main branch)
-   - `joewalters/quotecanvas:main` (for main branch)
-   - `joewalters/quotecanvas:main-<commit-sha>` (specific commit)
+3. **Tag**: Create two tags:
+   - `joewalters/quotecanvas:latest` (always points to newest)
+   - `joewalters/quotecanvas:YYMMDDHHmmss` (timestamped version, e.g., `251007143022`)
 4. **Push**: Upload to Docker Hub automatically
 5. **Cache**: Use GitHub Actions cache for faster builds
 
@@ -74,8 +73,8 @@ Once the first build completes, anyone can use your image:
 # Pull and run the latest version
 docker run -p 8000:8000 joewalters/quotecanvas:latest
 
-# Or pull a specific commit
-docker run -p 8000:8000 joewalters/quotecanvas:main-abc1234
+# Or pull a specific timestamped version
+docker run -p 8000:8000 joewalters/quotecanvas:251007143022
 ```
 
 ## Troubleshooting

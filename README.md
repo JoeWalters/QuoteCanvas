@@ -53,7 +53,14 @@ docker run -p 8000:8000 joewalters/quotecanvas:latest
 
 # Or run in detached mode
 docker run -d -p 8000:8000 --name quotecanvas joewalters/quotecanvas:latest
+
+# Run a specific timestamped version
+docker run -p 8000:8000 joewalters/quotecanvas:251007143022
 ```
+
+**Available Tags:**
+- `latest` - Most recent stable version
+- `YYMMDDHHmmss` - Timestamped versions (e.g., `251007143022` for Oct 7, 2025 at 14:30:22)
 
 ### 💻 Local Development
 

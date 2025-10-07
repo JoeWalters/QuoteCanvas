@@ -1,3 +1,6 @@
+// App version - updated automatically by GitHub Actions
+const APP_VERSION = 'dev';
+
 class QuoteCanvas {
     constructor() {
         this.quotes = [];
@@ -2381,5 +2384,16 @@ class QuoteCanvas {
 
 // Initialize the application when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
+    // Update version display
+    const versionElement = document.getElementById('app-version');
+    const footerVersionElement = document.getElementById('footer-version');
+    
+    if (versionElement) {
+        versionElement.textContent = APP_VERSION;
+    }
+    if (footerVersionElement) {
+        footerVersionElement.textContent = APP_VERSION;
+    }
+    
     new QuoteCanvas();
 });
