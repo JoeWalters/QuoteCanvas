@@ -43,7 +43,21 @@ Transform your quotes into stunning, professional images with QuoteCanvas - a co
 
 ## 🚀 Getting Started
 
-### Prerequisites
+### Using Pre-built Docker Image
+
+The easiest way to run QuoteCanvas is using our pre-built Docker image from Docker Hub:
+
+```bash
+# Run the latest version
+docker run -p 8000:8000 joewalters/quotecanvas:latest
+
+# Or run in detached mode
+docker run -d -p 8000:8000 --name quotecanvas joewalters/quotecanvas:latest
+```
+
+### 💻 Local Development
+
+**Prerequisites:**
 - Modern web browser (Chrome 80+, Firefox 75+, Safari 13+, Edge 80+)
 - No installation required - runs entirely in your browser!
 - Recommended: 8GB+ RAM for large collections (app uses ~100MB peak)
