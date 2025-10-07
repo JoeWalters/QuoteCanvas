@@ -159,7 +159,57 @@
                 </div>
             </section>
 
-            <!-- Preview Section -->
+            <!-- Naming Scheme Section -->
+            <section class="naming-section">
+                <h2 class="accordion-header" id="naming-header">
+                    <span>Photo Naming Scheme <small class="accordion-hint">(click to expand)</small></span>
+                    <span class="accordion-icon">▼</span>
+                </h2>
+                <div class="accordion-content" id="naming-content">
+                    <div class="controls-grid">
+                    <div class="control-group">
+                        <label for="naming-pattern">Naming Pattern</label>
+                        <input type="text" id="naming-pattern" value="quote-{index}" placeholder="quote-{index}">
+                        <small class="control-hint">Available variables: {index}, {quote}, {date}, {time}, {timestamp}</small>
+                    </div>
+                    <div class="control-group">
+                        <label for="index-start">Index Start Number</label>
+                        <input type="number" id="index-start" value="1" min="0">
+                    </div>
+                    <div class="control-group">
+                        <label for="index-padding">Index Zero Padding</label>
+                        <input type="number" id="index-padding" value="0" min="0" max="10">
+                        <small class="control-hint">Number of digits (0 = no padding, 3 = 001, 002, etc.)</small>
+                    </div>
+                    <div class="control-group">
+                        <label for="quote-max-length">Quote Text Max Length</label>
+                        <input type="number" id="quote-max-length" value="30" min="5" max="100">
+                        <small class="control-hint">Maximum characters from quote text in filename</small>
+                    </div>
+                    <div class="control-group">
+                        <label for="date-format">Date Format</label>
+                        <select id="date-format">
+                            <option value="YYYY-MM-DD">YYYY-MM-DD (2024-03-15)</option>
+                            <option value="MM-DD-YYYY">MM-DD-YYYY (03-15-2024)</option>
+                            <option value="DD-MM-YYYY">DD-MM-YYYY (15-03-2024)</option>
+                            <option value="YYYYMMDD">YYYYMMDD (20240315)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="time-format">Time Format</label>
+                        <select id="time-format">
+                            <option value="HH-MM-SS">HH-MM-SS (14-30-45)</option>
+                            <option value="HH-MM">HH-MM (14-30)</option>
+                            <option value="HHMMSS">HHMMSS (143045)</option>
+                            <option value="HHMM">HHMM (1430)</option>
+                        </select>
+                    </div>
+                    </div>
+                    <div class="naming-preview">
+                        <strong>Preview:</strong> <span id="naming-preview-text">quote-1.png</span>
+                    </div>
+                </div>
+            </section>            <!-- Preview Section -->
             <section class="preview-section">
                 <h2>Preview</h2>
                 <div class="preview-container">

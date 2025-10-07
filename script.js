@@ -12,6 +12,7 @@ class QuoteCanvas {
         this.initializeElements();
         this.bindEvents();
         this.setupCanvas();
+        this.updateNamingPreview();
     }
 
     initializeElements() {
@@ -75,6 +76,19 @@ class QuoteCanvas {
         this.backgroundPreview = document.getElementById('background-preview');
         this.backgroundControls = document.getElementById('background-controls');
         this.clearBackgroundsBtn = document.getElementById('clear-backgrounds');
+        
+        // Naming scheme controls
+        this.namingPatternInput = document.getElementById('naming-pattern');
+        this.indexStartInput = document.getElementById('index-start');
+        this.indexPaddingInput = document.getElementById('index-padding');
+        this.quoteMaxLengthInput = document.getElementById('quote-max-length');
+        this.dateFormatSelect = document.getElementById('date-format');
+        this.timeFormatSelect = document.getElementById('time-format');
+        this.namingPreviewText = document.getElementById('naming-preview-text');
+        
+        // Accordion controls
+        this.namingHeader = document.getElementById('naming-header');
+        this.namingContent = document.getElementById('naming-content');
     }
 
     bindEvents() {
@@ -128,6 +142,17 @@ class QuoteCanvas {
         this.generateCurrentBtn.addEventListener('click', () => this.generateCurrentImage());
         this.downloadAllBtn.addEventListener('click', () => this.downloadAllImages());
         this.clearBackgroundsBtn.addEventListener('click', () => this.clearAllBackgrounds());
+        
+        // Naming scheme controls
+        this.namingPatternInput.addEventListener('input', () => this.updateNamingPreview());
+        this.indexStartInput.addEventListener('input', () => this.updateNamingPreview());
+        this.indexPaddingInput.addEventListener('input', () => this.updateNamingPreview());
+        this.quoteMaxLengthInput.addEventListener('input', () => this.updateNamingPreview());
+        this.dateFormatSelect.addEventListener('change', () => this.updateNamingPreview());
+        this.timeFormatSelect.addEventListener('change', () => this.updateNamingPreview());
+        
+        // Accordion toggle
+        this.namingHeader.addEventListener('click', () => this.toggleNamingAccordion());
     }
 
     setupCanvas() {
@@ -159,6 +184,117 @@ class QuoteCanvas {
         
         this.previewCanvas.style.width = displayWidth + 'px';
         this.previewCanvas.style.height = displayHeight + 'px';
+    }
+
+    // Naming scheme functionality
+    updateNamingPreview() {
+        const sampleQuote = this.quotes.length > 0 ? this.quotes[this.currentQuoteIndex] : "This is a sample quote";
+        const index = this.quotes.length > 0 ? this.currentQuoteIndex : 0;
+        const filename = this.generateFilename(index, sampleQuote);
+        this.namingPreviewText.textContent = filename;
+    }
+
+    generateFilename(index, quote) {
+        const pattern = this.namingPatternInput.value || 'quote-{index}';
+        const indexStart = parseInt(this.indexStartInput.value) || 1;
+        const indexPadding = parseInt(this.indexPaddingInput.value) || 0;
+        const quoteMaxLength = parseInt(this.quoteMaxLengthInput.value) || 30;
+        const dateFormat = this.dateFormatSelect.value;
+        const timeFormat = this.timeFormatSelect.value;
+
+        const now = new Date();
+        const actualIndex = index + indexStart;
+        
+        // Pad index with zeros if requested
+        const paddedIndex = indexPadding > 0 ? 
+            actualIndex.toString().padStart(indexPadding, '0') : 
+            actualIndex.toString();
+
+        // Clean quote text for filename
+        const cleanQuote = this.sanitizeForFilename(quote)
+            .substring(0, quoteMaxLength)
+            .trim();
+
+        // Format date
+        const formattedDate = this.formatDate(now, dateFormat);
+        
+        // Format time
+        const formattedTime = this.formatTime(now, timeFormat);
+        
+        // Unix timestamp
+        const timestamp = Math.floor(now.getTime() / 1000);
+
+        // Replace variables in pattern
+        let filename = pattern
+            .replace(/\{index\}/g, paddedIndex)
+            .replace(/\{quote\}/g, cleanQuote)
+            .replace(/\{date\}/g, formattedDate)
+            .replace(/\{time\}/g, formattedTime)
+            .replace(/\{timestamp\}/g, timestamp.toString());
+
+        // Clean filename
+        filename = this.sanitizeForFilename(filename);
+        
+        return filename + '.png';
+    }
+
+    sanitizeForFilename(text) {
+        // Remove or replace characters that are invalid in filenames
+        return text
+            .replace(/[<>:"/\\|?*\x00-\x1f]/g, '') // Remove invalid chars
+            .replace(/\s+/g, '-') // Replace spaces with hyphens
+            .replace(/[^\w\-_.]/g, '') // Keep only alphanumeric, hyphens, underscores, and dots
+            .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
+            .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
+    }
+
+    formatDate(date, format) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+
+        switch (format) {
+            case 'MM-DD-YYYY':
+                return `${month}-${day}-${year}`;
+            case 'DD-MM-YYYY':
+                return `${day}-${month}-${year}`;
+            case 'YYYYMMDD':
+                return `${year}${month}${day}`;
+            case 'YYYY-MM-DD':
+            default:
+                return `${year}-${month}-${day}`;
+        }
+    }
+
+    formatTime(date, format) {
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+
+        switch (format) {
+            case 'HH-MM':
+                return `${hours}-${minutes}`;
+            case 'HHMMSS':
+                return `${hours}${minutes}${seconds}`;
+            case 'HHMM':
+                return `${hours}${minutes}`;
+            case 'HH-MM-SS':
+            default:
+                return `${hours}-${minutes}-${seconds}`;
+        }
+    }
+
+    // Accordion functionality
+    toggleNamingAccordion() {
+        const isActive = this.namingContent.classList.contains('active');
+        
+        if (isActive) {
+            this.namingContent.classList.remove('active');
+            this.namingHeader.classList.remove('active');
+        } else {
+            this.namingContent.classList.add('active');
+            this.namingHeader.classList.add('active');
+        }
     }
 
     async handleTextFiles(event) {
@@ -453,6 +589,7 @@ class QuoteCanvas {
         this.nextQuoteBtn.disabled = this.currentQuoteIndex >= this.quotes.length - 1 || this.quotes.length === 0;
         this.generateAllBtn.disabled = this.quotes.length === 0;
         this.generateCurrentBtn.disabled = this.quotes.length === 0;
+        this.updateNamingPreview();
     }
 
     previousQuote() {
@@ -1105,7 +1242,7 @@ class QuoteCanvas {
                 const imageData = {
                     blob: blob,
                     dataUrl: canvas.toDataURL('image/png', 0.9),
-                    filename: `quote-${i + 1}.png`,
+                    filename: this.generateFilename(i, this.quotes[i]),
                     quote: this.quotes[i]
                 };
                 
@@ -1159,7 +1296,7 @@ class QuoteCanvas {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `quote-${this.currentQuoteIndex + 1}.png`;
+            a.download = this.generateFilename(this.currentQuoteIndex, this.quotes[this.currentQuoteIndex]);
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
