@@ -1,0 +1,24 @@
+# Docker Compose for Unraid
+# Simple configuration optimized for Unraid compatibility
+
+version: '3.8'
+
+services:
+  quotecanvas:
+    image: joewalters/quotecanvas:latest
+    container_name: quotecanvas
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    environment:
+      - NGINX_WORKER_PROCESSES=auto
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.quotecanvas.rule=Host(`quotecanvas.local`)"
+      - "traefik.http.services.quotecanvas.loadbalancer.server.port=8000"

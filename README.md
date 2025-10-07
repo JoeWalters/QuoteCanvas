@@ -56,13 +56,39 @@ docker run -d -p 8000:8000 --name quotecanvas joewalters/quotecanvas:latest
 
 # Run a specific timestamped version
 docker run -p 8000:8000 joewalters/quotecanvas:251007143022
+
+# For Unraid users (optimized for compatibility)
+docker run -d \
+  --name=quotecanvas \
+  -p 8000:8000 \
+  --restart=unless-stopped \
+  joewalters/quotecanvas:latest
 ```
 
 **Available Tags:**
 - `latest` - Most recent stable version
 - `YYMMDDHHmmss` - Timestamped versions (e.g., `251007143022` for Oct 7, 2025 at 14:30:22)
 
-### 💻 Local Development
+### �️ Unraid Installation
+
+For Unraid users, QuoteCanvas can be easily installed through the Community Applications plugin:
+
+1. **Search for QuoteCanvas** in Community Applications, or
+2. **Manual Docker Setup**:
+   - Container: `joewalters/quotecanvas:latest`
+   - Port: `8000:8000`
+   - Restart Policy: `unless-stopped`
+
+**Unraid Docker Run Command:**
+```bash
+docker run -d \
+  --name=quotecanvas \
+  -p 8000:8000 \
+  --restart=unless-stopped \
+  joewalters/quotecanvas:latest
+```
+
+### �💻 Local Development
 
 **Prerequisites:**
 - Modern web browser (Chrome 80+, Firefox 75+, Safari 13+, Edge 80+)
