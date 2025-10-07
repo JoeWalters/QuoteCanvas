@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuoteCanvas - Generate Beautiful Quote Images</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>QuoteCanvas</h1>
+            <p>Transform your quotes into beautiful, shareable images</p>
+        </header>
+
+        <main>
+            <!-- File Upload Section -->
+            <section class="upload-section">
+                <h2>Upload Your Content</h2>
+                <div class="upload-area">
+                    <div class="file-upload">
+                        <label for="text-file" class="file-label" id="text-file-label">
+                            <div class="upload-icon">📄</div>
+                            <span id="text-file-status">Upload Text/JSON File</span>
+                            <input type="file" id="text-file" accept=".txt,.json" multiple>
+                        </label>
+                        <div id="text-file-feedback" class="file-status" style="display: none;"></div>
+                    </div>
+                    <div class="or-divider">OR</div>
+                    <div class="text-input">
+                        <textarea id="manual-text" placeholder="Paste your quotes here (one per line)..." rows="6"></textarea>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Background Upload Section -->
+            <section class="background-section">
+                <h2>Background Images (Optional)</h2>
+                <div class="background-upload">
+                    <label for="background-files" class="file-label" id="background-files-label">
+                        <div class="upload-icon">🖼️</div>
+                        <span id="background-files-status">Upload Background Images</span>
+                        <input type="file" id="background-files" accept="image/*" multiple>
+                    </label>
+                    <div id="background-files-feedback" class="file-status" style="display: none;"></div>
+                    <div class="background-controls" id="background-controls" style="display: none;">
+                        <button id="clear-backgrounds" class="secondary-btn small-btn">Clear All Backgrounds</button>
+                    </div>
+                    <div class="background-preview" id="background-preview"></div>
+                </div>
+            </section>
+
+            <!-- Customization Section -->
+            <section class="customization-section">
+                <h2>Customize Your Images</h2>
+                <div class="controls-grid">
+                    <div class="control-group">
+                        <label for="image-width">Width (px)</label>
+                        <input type="number" id="image-width" value="1080" min="400" max="2000">
+                    </div>
+                    <div class="control-group">
+                        <label for="image-height">Height (px)</label>
+                        <input type="number" id="image-height" value="1080" min="400" max="2000">
+                    </div>
+                    <div class="control-group">
+                        <label for="font-family">Font Family</label>
+                        <select id="font-family">
+                            <option value="Inter">Inter</option>
+                            <option value="Playfair Display">Playfair Display</option>
+                            <option value="Roboto">Roboto</option>
+                            <option value="Arial">Arial</option>
+                            <option value="Georgia">Georgia</option>
+                            <option value="Times New Roman">Times New Roman</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Font Style</label>
+                        <div class="font-style-controls">
+                            <button type="button" id="font-bold" class="style-btn" title="Bold">
+                                <strong>B</strong>
+                            </button>
+                            <button type="button" id="font-italic" class="style-btn" title="Italic">
+                                <em>I</em>
+                            </button>
+                            <button type="button" id="font-underline" class="style-btn" title="Underline">
+                                <u>U</u>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label for="font-weight">Font Weight</label>
+                        <select id="font-weight">
+                            <option value="300">Light (300)</option>
+                            <option value="400" selected>Normal (400)</option>
+                            <option value="500">Medium (500)</option>
+                            <option value="600">Semi-Bold (600)</option>
+                            <option value="700">Bold (700)</option>
+                            <option value="900">Black (900)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="font-size">Font Size</label>
+                        <input type="range" id="font-size" min="24" max="80" value="48">
+                        <span id="font-size-value">48px</span>
+                    </div>
+                    <div class="control-group">
+                        <label for="text-color">Text Color</label>
+                        <input type="color" id="text-color" value="#ffffff">
+                    </div>
+                    <div class="control-group">
+                        <label for="background-color">Background Color</label>
+                        <input type="color" id="background-color" value="#2c3e50">
+                    </div>
+                    <div class="control-group">
+                        <label for="text-align">Text Alignment</label>
+                        <select id="text-align">
+                            <option value="center">Center</option>
+                            <option value="left">Left</option>
+                            <option value="right">Right</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="padding">Padding</label>
+                        <input type="range" id="padding" min="20" max="100" value="60">
+                        <span id="padding-value">60px</span>
+                    </div>
+                    <div class="control-group">
+                        <label for="overlay-opacity">Background Overlay Opacity</label>
+                        <input type="range" id="overlay-opacity" min="0" max="100" value="40">
+                        <span id="overlay-opacity-value">40%</span>
+                    </div>
+                    <div class="control-group">
+                        <label for="text-shadow">Drop Shadow Style</label>
+                        <select id="text-shadow">
+                            <option value="none">None</option>
+                            <option value="subtle">Subtle Drop Shadow</option>
+                            <option value="soft" selected>Soft Drop Shadow</option>
+                            <option value="hard">Hard Drop Shadow</option>
+                            <option value="long">Long Drop Shadow</option>
+                            <option value="glow">Text Glow</option>
+                            <option value="outline">Text Outline</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="shadow-color">Shadow Color</label>
+                        <input type="color" id="shadow-color" value="#000000">
+                    </div>
+                    <div class="control-group">
+                        <label for="shadow-opacity">Shadow Opacity</label>
+                        <input type="range" id="shadow-opacity" min="0" max="100" value="50">
+                        <span id="shadow-opacity-value">50%</span>
+                    </div>
+                    <div class="control-group">
+                        <label for="line-height">Line Spacing</label>
+                        <input type="range" id="line-height" min="100" max="200" value="140">
+                        <span id="line-height-value">1.4</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Preview Section -->
+            <section class="preview-section">
+                <h2>Preview</h2>
+                <div class="preview-container">
+                    <canvas id="preview-canvas"></canvas>
+                </div>
+                <div class="preview-controls">
+                    <button id="prev-quote" disabled>← Previous</button>
+                    <span id="quote-counter">0 / 0</span>
+                    <button id="next-quote" disabled>Next →</button>
+                </div>
+            </section>
+
+            <!-- Generation Section -->
+            <section class="generation-section">
+                <h2>Generate Images</h2>
+                <div class="generation-controls">
+                    <button id="generate-all" class="primary-btn" disabled>Generate All Images</button>
+                    <button id="generate-current" class="secondary-btn" disabled>Generate Current Image</button>
+                </div>
+                <div class="progress-container" id="progress-container" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <span id="progress-text">0%</span>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section class="results-section" id="results-section" style="display: none;">
+                <h2>Generated Images</h2>
+                <div class="results-grid" id="results-grid"></div>
+                <button id="download-all" class="primary-btn">Download All as ZIP</button>
+            </section>
+        </main>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
