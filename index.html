@@ -6,17 +6,109 @@
     <title>QuoteCanvas - Generate Beautiful Quote Images</title>
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#667eea">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, maximum-scale=5.0">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>QuoteCanvas</h1>
-            <p>Transform your quotes into beautiful, shareable images</p>
+            <div class="header-content">
+                <h1>QuoteCanvas</h1>
+                <p>Transform your quotes into beautiful, shareable images</p>
+            </div>
+            <div class="header-controls">
+                <button id="theme-toggle" class="theme-toggle" title="Toggle Dark Mode">🌙</button>
+                <button id="settings-toggle" class="settings-toggle" title="Settings">⚙️</button>
+                <button id="performance-toggle" class="performance-toggle" title="Performance Monitor">📊</button>
+            </div>
         </header>
 
+        <!-- Settings Panel -->
+        <div id="settings-panel" class="settings-panel" style="display: none;">
+            <h3>Settings</h3>
+            <div class="settings-grid">
+                <div class="setting-group">
+                    <label for="auto-save-settings">Auto-save Settings</label>
+                    <input type="checkbox" id="auto-save-settings" checked>
+                </div>
+                <div class="setting-group">
+                    <label for="preview-quality">Preview Quality</label>
+                    <select id="preview-quality">
+                        <option value="low">Low (Fast)</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High (Slow)</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label for="touch-mode">Touch-Friendly Mode</label>
+                    <input type="checkbox" id="touch-mode">
+                </div>
+            </div>
+            <div class="settings-actions">
+                <button id="save-settings-btn" class="primary-btn">Save Settings</button>
+                <button id="reset-settings-btn" class="secondary-btn">Reset to Defaults</button>
+            </div>
+        </div>
+
+        <!-- Performance Monitor -->
+        <div id="performance-panel" class="performance-panel" style="display: none;">
+            <h3>Performance Monitor</h3>
+            <div class="performance-stats">
+                <div class="stat-item">
+                    <span class="stat-label">Memory Usage:</span>
+                    <span id="memory-usage" class="stat-value">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Cache Size:</span>
+                    <span id="cache-size" class="stat-value">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Generation Speed:</span>
+                    <span id="generation-speed" class="stat-value">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Images Generated:</span>
+                    <span id="images-generated" class="stat-value">0</span>
+                </div>
+            </div>
+        </div>
+
         <main>
-            <!-- File Upload Section -->
-            <section class="upload-section">
+            <!-- Progress Indicator -->
+            <div class="progress-indicator">
+                <div class="step-progress">
+                    <div class="progress-line"></div>
+                    <div class="step-item active" data-step="1">
+                        <div class="step-number">1</div>
+                        <div class="step-label">Content</div>
+                    </div>
+                    <div class="step-item" data-step="2">
+                        <div class="step-number">2</div>
+                        <div class="step-label">Design</div>
+                    </div>
+                    <div class="step-item" data-step="3">
+                        <div class="step-number">3</div>
+                        <div class="step-label">Effects</div>
+                    </div>
+                    <div class="step-item" data-step="4">
+                        <div class="step-number">4</div>
+                        <div class="step-label">Generate</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation Tabs -->
+            <nav class="tab-navigation">
+                <button class="tab-btn active" data-tab="content-tab">📄 1. Content</button>
+                <button class="tab-btn" data-tab="design-tab">🎨 2. Design</button>
+                <button class="tab-btn" data-tab="effects-tab">✨ 3. Effects</button>
+                <button class="tab-btn" data-tab="export-tab">🎯 4. Generate & Export</button>
+            </nav>
+
+            <!-- Content Tab -->
+            <div class="tab-content active" id="content-tab">
+                <!-- File Upload Section -->
+                <section class="upload-section">
                 <h2>Upload Your Content</h2>
                 <div class="upload-area">
                     <div class="file-upload">
@@ -50,8 +142,11 @@
                     <div class="background-preview" id="background-preview"></div>
                 </div>
             </section>
+            </div>
 
-            <!-- Customization Section -->
+            <!-- Design Tab -->
+            <div class="tab-content" id="design-tab">
+                <!-- Customization Section -->
             <section class="customization-section">
                 <h2>Customize Your Images</h2>
                 <div class="controls-grid">
@@ -209,40 +304,188 @@
                         <strong>Preview:</strong> <span id="naming-preview-text">quote-1.png</span>
                     </div>
                 </div>
-            </section>            <!-- Preview Section -->
-            <section class="preview-section">
-                <h2>Preview</h2>
-                <div class="preview-container">
-                    <canvas id="preview-canvas"></canvas>
-                </div>
-                <div class="preview-controls">
-                    <button id="prev-quote" disabled>← Previous</button>
-                    <span id="quote-counter">0 / 0</span>
-                    <button id="next-quote" disabled>Next →</button>
-                </div>
             </section>
+            </div>
 
-            <!-- Generation Section -->
-            <section class="generation-section">
-                <h2>Generate Images</h2>
-                <div class="generation-controls">
-                    <button id="generate-all" class="primary-btn" disabled>Generate All Images</button>
-                    <button id="generate-current" class="secondary-btn" disabled>Generate Current Image</button>
-                </div>
-                <div class="progress-container" id="progress-container" style="display: none;">
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="progress-fill"></div>
+            <!-- Effects Tab -->
+            <div class="tab-content" id="effects-tab">
+                <!-- Background Effects Section -->
+                <section class="effects-section">
+                    <h2>Background Effects & Filters</h2>
+                    <div class="controls-grid">
+                        <div class="control-group">
+                            <label for="bg-blur">Background Blur</label>
+                            <input type="range" id="bg-blur" min="0" max="20" value="0">
+                            <span id="bg-blur-value">0px</span>
+                        </div>
+                        <div class="control-group">
+                            <label for="bg-brightness">Brightness</label>
+                            <input type="range" id="bg-brightness" min="0" max="200" value="100">
+                            <span id="bg-brightness-value">100%</span>
+                        </div>
+                        <div class="control-group">
+                            <label for="bg-contrast">Contrast</label>
+                            <input type="range" id="bg-contrast" min="0" max="200" value="100">
+                            <span id="bg-contrast-value">100%</span>
+                        </div>
+                        <div class="control-group">
+                            <label for="bg-saturation">Saturation</label>
+                            <input type="range" id="bg-saturation" min="0" max="200" value="100">
+                            <span id="bg-saturation-value">100%</span>
+                        </div>
+                        <div class="control-group">
+                            <label for="bg-filter">Color Filter</label>
+                            <select id="bg-filter">
+                                <option value="none">None</option>
+                                <option value="grayscale">Grayscale</option>
+                                <option value="sepia">Sepia</option>
+                                <option value="vintage">Vintage</option>
+                                <option value="cool">Cool Tone</option>
+                                <option value="warm">Warm Tone</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label for="vignette-strength">Vignette</label>
+                            <input type="range" id="vignette-strength" min="0" max="100" value="0">
+                            <span id="vignette-value">0%</span>
+                        </div>
+                        <div class="control-group">
+                            <label for="gradient-overlay">Gradient Overlay</label>
+                            <select id="gradient-overlay">
+                                <option value="none">None</option>
+                                <option value="dark-bottom">Dark Bottom</option>
+                                <option value="dark-top">Dark Top</option>
+                                <option value="dark-center">Dark Center</option>
+                                <option value="custom">Custom</option>
+                            </select>
+                        </div>
+                        <div class="control-group" id="gradient-colors" style="display: none;">
+                            <label for="gradient-color1">Gradient Color 1</label>
+                            <input type="color" id="gradient-color1" value="#000000">
+                        </div>
+                        <div class="control-group" id="gradient-colors2" style="display: none;">
+                            <label for="gradient-color2">Gradient Color 2</label>
+                            <input type="color" id="gradient-color2" value="#ffffff">
+                        </div>
                     </div>
-                    <span id="progress-text">0%</span>
-                </div>
-            </section>
+                </section>
+            </div>
 
-            <!-- Results Section -->
-            <section class="results-section" id="results-section" style="display: none;">
-                <h2>Generated Images</h2>
-                <div class="results-grid" id="results-grid"></div>
-                <button id="download-all" class="primary-btn">Download All as ZIP</button>
-            </section>
+            <!-- Export Tab -->
+            <div class="tab-content" id="export-tab">
+                <!-- Export Options Section -->
+                <section class="export-section">
+                    <h2>Export Format Options</h2>
+                    <div class="controls-grid">
+                        <div class="control-group">
+                            <label for="export-format">Format</label>
+                            <select id="export-format">
+                                <option value="png">PNG (Lossless)</option>
+                                <option value="jpeg">JPEG (Smaller Size)</option>
+                                <option value="webp">WebP (Modern)</option>
+                            </select>
+                        </div>
+                        <div class="control-group" id="jpeg-quality-group" style="display: none;">
+                            <label for="jpeg-quality">JPEG Quality</label>
+                            <input type="range" id="jpeg-quality" min="10" max="100" value="85">
+                            <span id="jpeg-quality-value">85%</span>
+                        </div>
+                        <div class="control-group">
+                            <label for="export-resolution">Resolution Preset</label>
+                            <select id="export-resolution">
+                                <option value="custom">Custom</option>
+                                <option value="instagram-square">Instagram Square (1080x1080)</option>
+                                <option value="instagram-story">Instagram Story (1080x1920)</option>
+                                <option value="facebook-post">Facebook Post (1200x630)</option>
+                                <option value="twitter-card">Twitter Card (1200x675)</option>
+                                <option value="4k">4K (3840x2160)</option>
+                                <option value="hd">HD (1920x1080)</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label for="zip-compression">ZIP Compression</label>
+                            <select id="zip-compression">
+                                <option value="fast">Fast (Less Compression)</option>
+                                <option value="balanced" selected>Balanced</option>
+                                <option value="best">Best (More Compression)</option>
+                            </select>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Generation Section -->
+                <section class="generation-section">
+                    <h2>Generate Images</h2>
+                    <div class="generation-controls">
+                        <button id="generate-all" class="primary-btn" disabled>Generate All Images</button>
+                        <button id="generate-current" class="secondary-btn" disabled>Generate Current Image</button>
+                    </div>
+                    <div class="progress-container" id="progress-container" style="display: none;">
+                        <div class="progress-info">
+                            <span id="progress-text">0%</span>
+                            <span id="progress-details">Starting...</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress-fill"></div>
+                        </div>
+                        <div class="progress-actions">
+                            <button id="pause-generation" class="secondary-btn">Pause</button>
+                            <button id="cancel-generation" class="secondary-btn">Cancel</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Results Section -->
+                <section class="results-section" id="results-section" style="display: none;">
+                    <h2>Generated Images</h2>
+                    <div class="results-controls">
+                        <button id="download-all" class="primary-btn">Download All as ZIP</button>
+                        <button id="download-selected" class="secondary-btn" disabled>Download Selected</button>
+                        <button id="regenerate-failed" class="secondary-btn" style="display: none;">Regenerate Failed</button>
+                    </div>
+                    <div class="results-grid" id="results-grid"></div>
+                </section>
+
+                <!-- Enhanced Preview Section -->
+                <section class="preview-section">
+                    <h2>Live Preview</h2>
+                    <div class="preview-toolbar">
+                        <div class="preview-controls">
+                            <button id="prev-quote" class="nav-btn" disabled>← Previous</button>
+                            <span id="quote-counter">0 / 0</span>
+                            <button id="next-quote" class="nav-btn" disabled>Next →</button>
+                        </div>
+                        <div class="preview-view-controls">
+                            <button id="zoom-out" class="zoom-btn">🔍-</button>
+                            <span id="zoom-level">100%</span>
+                            <button id="zoom-in" class="zoom-btn">🔍+</button>
+                            <button id="fullscreen-preview" class="view-btn">⛶</button>
+                            <button id="comparison-mode" class="view-btn">👁️‍🗨️</button>
+                        </div>
+                    </div>
+                    <div class="preview-container" id="preview-container">
+                        <div class="preview-main">
+                            <canvas id="preview-canvas"></canvas>
+                        </div>
+                        <div class="preview-comparison" id="preview-comparison" style="display: none;">
+                            <canvas id="comparison-canvas"></canvas>
+                        </div>
+                    </div>
+                    <div class="preview-info">
+                        <span id="current-quote-text" class="quote-preview"></span>
+                    </div>
+                </section>
+
+                <!-- Quick Actions -->
+                <section class="quick-actions">
+                    <h2>Quick Actions</h2>
+                    <div class="quick-buttons">
+                        <button id="random-quote" class="action-btn">🎲 Random Quote</button>
+                        <button id="duplicate-settings" class="action-btn">📋 Copy Settings</button>
+                        <button id="reset-effects" class="action-btn">🔄 Reset Effects</button>
+                    </div>
+                </section>
+            </div>
         </main>
     </div>
 
