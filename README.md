@@ -1,15 +1,21 @@
 # QuoteCanvas 🎨
 
-Transform your quotes into beautiful, shareable images with QuoteCanvas - a modern web application for generating stylish quote graphics.
+Transform your quotes into beautiful, shareable images with QuoteCanvas - a memory-efficient web application for generating stylish quote graphics at scale.
 
 ## ✨ Features
 
 - **Multiple Input Methods**: Upload text files, JSON files, or paste quotes directly
-- **Custom Background Images**: Upload your own background images or use solid colors
+- **Memory-Efficient Processing**: Handle hundreds of HD background images without performance issues
+- **Smart Background Cycling**: Automatically cycles through backgrounds for large quote collections
+- **Custom Background Images**: Upload your own HD background images with intelligent caching
 - **Flexible Dimensions**: Choose custom image dimensions (400px - 2000px)
-- **Typography Control**: Select from multiple fonts, adjust size, color, and alignment
-- **Real-time Preview**: See your changes instantly with live preview
-- **Batch Generation**: Generate all quotes at once or create individual images
+- **Advanced Typography Control**: 
+  - Multiple font families and weights
+  - Bold, italic, and underline styling
+  - Drop shadows with customizable opacity and colors
+  - Text outlines and glow effects
+- **Real-time Preview**: See your changes instantly with live preview and background selection
+- **Scalable Batch Generation**: Generate hundreds of images efficiently with progress tracking
 - **Export Options**: Download individual images or all images as a ZIP file
 
 ## 🚀 Getting Started
@@ -72,13 +78,32 @@ Or with objects:
 
 ## 🎨 Customization Options
 
-- **Dimensions**: 400x400 to 2000x2000 pixels
+### Image Settings
+- **Dimensions**: 400x400 to 2000x2000 pixels with real-time preview scaling
+- **Backgrounds**: Upload unlimited HD images with smart memory management
+- **Background Cycling**: Automatically distributes backgrounds across all quotes
+- **Overlay Opacity**: Adjustable dark overlay for better text readability (0-100%)
+
+### Typography Controls
 - **Fonts**: Inter, Playfair Display, Roboto, Arial, Georgia, Times New Roman
-- **Font Size**: 24px to 80px
-- **Colors**: Custom text and background colors
-- **Alignment**: Left, Center, Right
-- **Padding**: 20px to 100px
-- **Backgrounds**: Upload multiple images, automatically cycles through them
+- **Font Weights**: 100 (Thin) to 900 (Black)
+- **Font Size**: 24px to 80px with live preview
+- **Font Styles**: Bold, Italic, Underline toggles
+- **Text Alignment**: Left, Center, Right
+- **Line Height**: Adjustable spacing between lines (1.0x to 2.0x)
+- **Padding**: 20px to 100px margins
+
+### Text Effects
+- **Drop Shadows**: Subtle, Soft, Hard, Long shadow styles
+- **Text Glow**: Luminous glow effect using text color
+- **Text Outline**: Customizable stroke around text
+- **Shadow Colors**: Full color picker for shadow effects
+- **Shadow Opacity**: 0-100% transparency control
+
+### Colors
+- **Text Color**: Full color picker with hex support
+- **Background Color**: Solid color fallback option
+- **Shadow Color**: Independent shadow color selection
 
 ## 🛠️ Technical Details
 
