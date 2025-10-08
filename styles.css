@@ -50,6 +50,23 @@ body.dark-theme .or-divider {
     color: #a0a0a0;
 }
 
+body.dark-theme section h2 {
+    color: #e0e0e0;
+}
+
+body.dark-theme .control-group label {
+    color: #e0e0e0;
+}
+
+body.dark-theme .naming-preview {
+    background: #34495e;
+    border-left-color: #3498db;
+}
+
+body.dark-theme .naming-preview strong {
+    color: #e0e0e0;
+}
+
 body.dark-theme .text-input textarea {
     background: #34495e;
     color: #e0e0e0;
