@@ -42,6 +42,14 @@ body.dark-theme .file-label:hover {
     border-color: #5a6c7d;
 }
 
+body.dark-theme .file-label span {
+    color: #e0e0e0;
+}
+
+body.dark-theme .or-divider {
+    color: #a0a0a0;
+}
+
 body.dark-theme .text-input textarea {
     background: #34495e;
     color: #e0e0e0;

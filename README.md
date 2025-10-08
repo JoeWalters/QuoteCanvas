@@ -67,7 +67,7 @@ docker run -d \
 
 **Available Tags:**
 - `latest` - Most recent stable version
-- `YYMMDDHHmmss` - Timestamped versions (e.g., `251007143022` for Oct 7, 2025 at 14:30:22)
+- `YYYYMMDDHHmmss` - Timestamped versions (e.g., `20251007143022` for Oct 7, 2025 at 14:30:22)
 
 ### �️ Unraid Installation
 

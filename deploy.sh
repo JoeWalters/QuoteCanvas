@@ -14,7 +14,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 IMAGE_NAME="quotecanvas"
-VERSION=$(date +%Y%m%d-%H%M%S)
+VERSION=$(date +%Y%m%d%H%M%S)
 
 echo -e "${BLUE}🚀 QuoteCanvas Deployment Script${NC}"
 echo -e "${BLUE}===================================${NC}"
