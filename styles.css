@@ -67,6 +67,21 @@ body.dark-theme .naming-preview strong {
     color: #e0e0e0;
 }
 
+body.dark-theme .accordion-header {
+    background: linear-gradient(135deg, #34495e 0%, #2c3e50 100%);
+    color: #e0e0e0;
+}
+
+body.dark-theme .accordion-header:hover {
+    background: linear-gradient(135deg, #4a5568 0%, #34495e 100%);
+    color: #3498db;
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
+}
+
+body.dark-theme .accordion-icon {
+    color: #a0a0a0;
+}
+
 body.dark-theme .text-input textarea {
     background: #34495e;
     color: #e0e0e0;
