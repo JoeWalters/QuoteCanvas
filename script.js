@@ -1,6 +1,12 @@
 // App version - updated automatically by GitHub Actions
 const APP_VERSION = 'dev';
 
+// Preview zoom: 50%–300% in 10% steps, 100% is the untouched default.
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 3;
+const ZOOM_STEP = 0.1;
+const ZOOM_DEFAULT = 1;
+
 // ---- Pure filename helpers (module scope; used by the app and by node:test) ----
 
 function formatDate(date, format) {
@@ -142,7 +148,8 @@ class QuoteCanvas {
         
         // New properties for enhanced features
         this.currentTab = 'content-tab';
-        this.zoomLevel = 1;
+        this.zoomLevel = ZOOM_DEFAULT;
+        this.zoomLevelEl = document.getElementById('zoom-level');
         this.isDarkTheme = true;
         this.isTouchMode = false;
         this.isGenerating = false;
@@ -285,7 +292,8 @@ class QuoteCanvas {
         // Enhanced preview controls
         this.zoomInBtn = document.getElementById('zoom-in');
         this.zoomOutBtn = document.getElementById('zoom-out');
-        this.zoomLevel = document.getElementById('zoom-level');
+        this.zoomLevelEl = document.getElementById('zoom-level');
+        this.zoomResetBtn = document.getElementById('zoom-reset');
         this.fullscreenBtn = document.getElementById('fullscreen-preview');
         this.comparisonBtn = document.getElementById('comparison-mode');
         this.comparisonCanvas = document.getElementById('comparison-canvas');
@@ -447,8 +455,9 @@ class QuoteCanvas {
         });
         
         // Enhanced preview controls
-        this.zoomInBtn.addEventListener('click', () => this.adjustZoom(0.1));
-        this.zoomOutBtn.addEventListener('click', () => this.adjustZoom(-0.1));
+        this.zoomInBtn.addEventListener('click', () => this.adjustZoom(ZOOM_STEP));
+        this.zoomOutBtn.addEventListener('click', () => this.adjustZoom(-ZOOM_STEP));
+        this.zoomResetBtn.addEventListener('click', () => this.resetZoom());
         this.fullscreenBtn.addEventListener('click', () => this.toggleFullscreen());
         this.comparisonBtn.addEventListener('click', () => this.toggleComparison());
         
@@ -724,40 +733,52 @@ class QuoteCanvas {
     
     // Enhanced preview controls
     adjustZoom(delta) {
-        this.zoomLevel = Math.max(0.5, Math.min(3, this.zoomLevel + delta));
-        this.zoomLevel.textContent = Math.round(this.zoomLevel * 100) + '%';
+        const next = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, this.zoomLevel + delta));
+        this.zoomLevel = Math.round(next * 1000) / 1000;
+        this.zoomLevelEl.textContent = Math.round(this.zoomLevel * 100) + '%';
         this.applyZoom();
     }
-    
+
     applyZoom() {
         const canvas = this.previewCanvas;
-        canvas.style.transform = `scale(${this.zoomLevel})`;
+        canvas.style.transform = this.zoomLevel === ZOOM_DEFAULT ? '' : `scale(${this.zoomLevel})`;
         canvas.style.transformOrigin = 'center center';
     }
-    
+
+    resetZoom() {
+        this.zoomLevel = ZOOM_DEFAULT;
+        this.zoomLevelEl.textContent = '100%';
+        this.applyZoom();
+    }
+
     toggleFullscreen() {
-        if (document.fullscreenElement) {
-            document.exitFullscreen();
-        } else {
-            const overlay = document.createElement('div');
-            overlay.className = 'fullscreen-overlay';
-            
-            const canvas = this.previewCanvas.cloneNode();
-            canvas.className = 'fullscreen-canvas';
-            
-            const closeBtn = document.createElement('button');
-            closeBtn.className = 'fullscreen-close';
-            closeBtn.textContent = '×';
-            closeBtn.onclick = () => document.body.removeChild(overlay);
-            
-            overlay.appendChild(canvas);
-            overlay.appendChild(closeBtn);
-            document.body.appendChild(overlay);
-            
-            // Copy current canvas content
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(this.previewCanvas, 0, 0);
-        }
+        const trigger = document.activeElement;
+        const dialog = document.createElement('dialog');
+        dialog.className = 'fullscreen-dialog';
+
+        const canvas = document.createElement('canvas');
+        canvas.className = 'fullscreen-dialog-canvas';
+        canvas.width = this.previewCanvas.width;
+        canvas.height = this.previewCanvas.height;
+        canvas.setAttribute('role', 'img');
+        canvas.setAttribute('aria-label', 'Full-size preview of the current quote');
+        canvas.getContext('2d').drawImage(this.previewCanvas, 0, 0);
+
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'fullscreen-close';
+        closeBtn.textContent = '×';
+        closeBtn.setAttribute('aria-label', 'Close full-size preview');
+        closeBtn.addEventListener('click', () => dialog.close());
+
+        dialog.append(canvas, closeBtn);
+        dialog.addEventListener('close', () => {
+            dialog.remove();
+            if (trigger && typeof trigger.focus === 'function' && trigger.isConnected) trigger.focus();
+        });
+        document.body.appendChild(dialog);
+        dialog.showModal();
+        closeBtn.focus();
     }
     
     toggleComparison() {
@@ -765,6 +786,7 @@ class QuoteCanvas {
         const isVisible = comparison.style.display !== 'none';
         
         comparison.style.display = isVisible ? 'none' : 'block';
+        this.comparisonBtn.setAttribute('aria-pressed', String(!isVisible));
         this.comparisonBtn.textContent = isVisible ? '👁️‍🗨️' : '👁️';
         
         if (!isVisible) {
@@ -1118,7 +1140,8 @@ class QuoteCanvas {
     
     // Keyboard shortcuts
     handleKeyboardShortcuts(e) {
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        const target = e.target;
+        if (target && target.closest && target.closest('input, textarea, select, button, a[href], [contenteditable="true"]')) return;
         
         switch(e.code) {
             case 'Space':
