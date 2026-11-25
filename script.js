@@ -1742,7 +1742,11 @@ class QuoteCanvas {
             console.error('Generation failed:', error);
             this.progressDetails.textContent = 'Generation failed: ' + error.message;
         } finally {
-            this.showGenerationUI(false);
+            // Leave the progress container visible so the cancelled/failed/success
+            // summary is actually readable; `showGenerationSummary` hides it after 5s
+            // and a failure message should stay until the next run.
+            this.generateAllBtn.disabled = false;
+            this.generateCurrentBtn.disabled = false;
             this.isGenerating = false;
         }
     }
@@ -1830,10 +1834,8 @@ class QuoteCanvas {
         // Update final stats
         this.updateGenerationStats();
         
-        // Show regenerate button if there were failures
-        if (this.failedImages.length > 0) {
-            this.regenerateFailedBtn.style.display = 'block';
-        }
+        // Show the regenerate button only while there is something left to retry
+        this.regenerateFailedBtn.style.display = this.failedImages.length > 0 ? 'block' : 'none';
     }
     
     setGeneratedImage(imageData) {
@@ -2291,6 +2293,9 @@ class QuoteCanvas {
         this.failedImages = []; // Reset failed list
         this.wasCancelled = false;
         this.isGenerating = true;
+        this.showGenerationUI(true);
+        this.generationStats.startTime = Date.now();
+        this.generationStats.imagesGenerated = 0;
         
         try {
             await this.ensureFontLoaded();
@@ -2300,6 +2305,8 @@ class QuoteCanvas {
             console.error('Failed to regenerate images:', error);
         } finally {
             this.isGenerating = false;
+            this.generateAllBtn.disabled = false;
+            this.generateCurrentBtn.disabled = false;
         }
     }
 
