@@ -2241,10 +2241,15 @@ class QuoteCanvas {
         info.style.background = 'rgba(0,0,0,0.7)';
         info.style.padding = '10px';
         info.style.borderRadius = '5px';
-        info.innerHTML = `
-            <strong>${imageData.filename}</strong><br>
-            <em>${imageData.quote.substring(0, 100)}${imageData.quote.length > 100 ? '...' : ''}</em>
-        `;
+        const infoName = document.createElement('strong');
+        infoName.textContent = imageData.filename;
+        const infoQuote = document.createElement('em');
+        const rawQuote = String(imageData.quote ?? '');
+        infoQuote.textContent = rawQuote.substring(0, 100) + (rawQuote.length > 100 ? '...' : '');
+
+        info.appendChild(infoName);
+        info.appendChild(document.createElement('br'));
+        info.appendChild(infoQuote);
         
         overlay.appendChild(img);
         overlay.appendChild(closeBtn);
