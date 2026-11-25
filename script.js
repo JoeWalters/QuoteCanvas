@@ -20,6 +20,8 @@ class QuoteCanvas {
         this.isTouchMode = false;
         this.isGenerating = false;
         this.isPaused = false;
+        this.wasCancelled = false;
+        this.loadedFontSpecs = new Set();
         this.generationStats = {
             startTime: null,
             imagesGenerated: 0,
@@ -1391,10 +1393,23 @@ class QuoteCanvas {
             return;
         }
         
-        this.updateCanvasSize();
-        this.drawQuoteImageWithEffects(this.currentQuoteIndex);
+        // Never paint a fallback face: if the selected font has not been loaded
+        // yet, wait for it and then draw once. `ensureFontLoaded` caches the spec
+        // even when the load fails, so this cannot wait forever.
+        const spec = this.getCanvasFontString();
+        if (document.fonts && !this.loadedFontSpecs.has(spec)) {
+            this.ensureFontLoaded().then(() => this.drawPreviewNow());
+        } else {
+            this.drawPreviewNow();
+        }
+        
         this.updateCurrentQuoteText();
         this.updateDockVisibility();
+    }
+    
+    drawPreviewNow() {
+        this.updateCanvasSize();
+        this.drawQuoteImageWithEffects(this.currentQuoteIndex);
     }
     
     updateCurrentQuoteText() {
@@ -1543,23 +1558,38 @@ class QuoteCanvas {
         }
     }
     
-    drawQuoteText(ctx, quote, width, height) {
+    getCanvasFontString() {
         const fontSize = parseInt(this.fontSizeInput.value);
         const fontFamily = this.fontFamilySelect.value;
         const fontWeight = this.fontWeightSelect.value;
+        let fontStyle = '';
+        if (this.fontItalicBtn.classList.contains('active')) {
+            fontStyle += 'italic ';
+        }
+        return `${fontStyle}${fontWeight} ${fontSize}px "${fontFamily}"`;
+    }
+    
+    async ensureFontLoaded() {
+        if (!document.fonts) return;
+        const spec = this.getCanvasFontString();
+        if (this.loadedFontSpecs.has(spec)) return;
+        try {
+            await document.fonts.load(spec);
+        } catch (error) {
+            // Ignore load failures; the spec is cached so the redraw terminates.
+        }
+        this.loadedFontSpecs.add(spec);
+    }
+    
+    drawQuoteText(ctx, quote, width, height) {
+        const fontSize = parseInt(this.fontSizeInput.value);
         const textColor = this.textColorInput.value;
         const textAlign = this.textAlignSelect.value;
         const padding = parseInt(this.paddingInput.value);
         const lineHeightMultiplier = parseInt(this.lineHeightInput.value) / 100;
         
-        // Build font string with weight and style
-        let fontStyle = '';
-        if (this.fontItalicBtn.classList.contains('active')) {
-            fontStyle += 'italic ';
-        }
-        
         ctx.fillStyle = textColor;
-        ctx.font = `${fontStyle}${fontWeight} ${fontSize}px "${fontFamily}"`;
+        ctx.font = this.getCanvasFontString();
         ctx.textAlign = textAlign;
         ctx.textBaseline = 'middle';
         
@@ -1684,10 +1714,11 @@ class QuoteCanvas {
         
         this.isGenerating = true;
         this.isPaused = false;
+        this.wasCancelled = false;
         this.failedImages = [];
         
         const totalQuotes = this.quotes.length;
-        const quotesToGenerate = this.quotes;
+        const items = this.quotes.map((quote, index) => ({ index, quote }));
         
         this.generationStats = {
             startTime: Date.now(),
@@ -1697,11 +1728,16 @@ class QuoteCanvas {
         };
         
         this.showGenerationUI(true);
-        this.generatedImages = [];
+        this.releaseGeneratedImages();
         
         try {
-            await this.generateImagesBatch(quotesToGenerate);
-            this.displayResults();
+            await this.ensureFontLoaded();
+            await this.generateImagesBatch(items);
+            if (this.generatedImages.length > 0 || !this.wasCancelled) {
+                this.displayResults();
+            } else {
+                this.progressDetails.textContent = `⏹️ Cancelled — 0 of ${totalQuotes} generated`;
+            }
         } catch (error) {
             console.error('Generation failed:', error);
             this.progressDetails.textContent = 'Generation failed: ' + error.message;
@@ -1717,11 +1753,11 @@ class QuoteCanvas {
         this.generateCurrentBtn.disabled = show;
     }
     
-    async generateImagesBatch(quotes) {
+    async generateImagesBatch(items) {
         const width = parseInt(this.imageWidthInput.value);
         const height = parseInt(this.imageHeightInput.value);
         
-        for (let i = 0; i < quotes.length; i++) {
+        for (let i = 0; i < items.length; i++) {
             if (!this.isGenerating) break; // Cancelled
             
             while (this.isPaused) {
@@ -1729,11 +1765,12 @@ class QuoteCanvas {
             }
             
             try {
-                const actualIndex = i;
-                const quote = quotes[i];
+                const item = items[i];
+                const actualIndex = item.index;
+                const quote = item.quote;
                 
                 // Update progress
-                this.updateGenerationProgress(i + 1, quotes.length, quote);
+                this.updateGenerationProgress(i + 1, items.length, quote);
                 
                 // Create temporary canvas for generation
                 const canvas = document.createElement('canvas');
@@ -1758,7 +1795,7 @@ class QuoteCanvas {
                 const blob = await this.canvasToBlob(canvas);
                 const imageData = {
                     blob: blob,
-                    dataUrl: canvas.toDataURL(this.getImageFormat(), this.getImageQuality()),
+                    objectUrl: URL.createObjectURL(blob),
                     filename: this.generateFilename(actualIndex, quote),
                     quote: quote,
                     index: actualIndex,
@@ -1767,7 +1804,7 @@ class QuoteCanvas {
                     success: true
                 };
                 
-                this.generatedImages.push(imageData);
+                this.setGeneratedImage(imageData);
                 this.generationStats.imagesGenerated++;
                 
                 // Cleanup
@@ -1783,8 +1820,8 @@ class QuoteCanvas {
             } catch (error) {
                 console.error(`Error generating image ${i + 1}:`, error);
                 this.failedImages.push({
-                    index: startIndex + i,
-                    quote: quotes[i],
+                    index: items[i].index,
+                    quote: items[i].quote,
                     error: error.message
                 });
             }
@@ -1797,6 +1834,29 @@ class QuoteCanvas {
         if (this.failedImages.length > 0) {
             this.regenerateFailedBtn.style.display = 'block';
         }
+    }
+    
+    setGeneratedImage(imageData) {
+        const existing = this.generatedImages.find(item => item.index === imageData.index);
+        if (existing) {
+            if (existing.objectUrl) {
+                URL.revokeObjectURL(existing.objectUrl);
+            }
+            const pos = this.generatedImages.indexOf(existing);
+            this.generatedImages[pos] = imageData;
+        } else {
+            this.generatedImages.push(imageData);
+        }
+        this.generatedImages.sort((a, b) => a.index - b.index);
+    }
+    
+    releaseGeneratedImages() {
+        for (const imageData of this.generatedImages) {
+            if (imageData.objectUrl) {
+                URL.revokeObjectURL(imageData.objectUrl);
+            }
+        }
+        this.generatedImages = [];
     }
     
     updateGenerationProgress(current, total, currentQuote) {
@@ -1825,6 +1885,7 @@ class QuoteCanvas {
     cancelGeneration() {
         this.isGenerating = false;
         this.isPaused = false;
+        this.wasCancelled = true;
         this.progressDetails.textContent = 'Generation cancelled';
         this.pauseGenerationBtn.textContent = 'Pause';
     }
@@ -2032,7 +2093,7 @@ class QuoteCanvas {
             checkbox.addEventListener('change', () => this.updateSelectionButtons());
             
             const img = document.createElement('img');
-            img.src = imageData.dataUrl;
+            img.src = imageData.objectUrl;
             img.alt = `Quote ${imageData.index + 1}`;
             img.loading = 'lazy';
             img.decoding = 'async';
@@ -2097,7 +2158,7 @@ class QuoteCanvas {
         overlay.className = 'fullscreen-overlay';
         
         const img = document.createElement('img');
-        img.src = imageData.dataUrl;
+        img.src = imageData.objectUrl;
         img.className = 'fullscreen-canvas';
         
         const closeBtn = document.createElement('button');
@@ -2132,17 +2193,22 @@ class QuoteCanvas {
     }
     
     showGenerationSummary() {
-        const total = this.generatedImages.length;
+        const total = this.generationStats.totalImages;
         const failed = this.failedImages.length;
-        const success = total;
+        const success = this.generatedImages.length;
         const elapsed = this.generationStats.startTime ? 
             ((Date.now() - this.generationStats.startTime) / 1000).toFixed(1) : 0;
         
-        let message = `✅ Generated ${success} images successfully`;
-        if (failed > 0) {
-            message += ` (${failed} failed)`;
+        let message;
+        if (this.wasCancelled) {
+            message = `⏹️ Cancelled — ${success} of ${total} generated`;
+        } else {
+            message = `✅ Generated ${success} images successfully`;
+            if (failed > 0) {
+                message += ` (${failed} failed)`;
+            }
+            message += ` in ${elapsed}s`;
         }
-        message += ` in ${elapsed}s`;
         
         this.progressDetails.textContent = message;
         
@@ -2220,16 +2286,20 @@ class QuoteCanvas {
     async regenerateFailed() {
         if (this.failedImages.length === 0) return;
         
-        const failedQuotes = this.failedImages.map(f => f.quote);
-        const failedIndices = this.failedImages.map(f => f.index);
+        const items = this.failedImages.map(({ index, quote }) => ({ index, quote }));
         
         this.failedImages = []; // Reset failed list
+        this.wasCancelled = false;
+        this.isGenerating = true;
         
         try {
-            await this.generateImagesBatch(failedQuotes, Math.min(...failedIndices));
+            await this.ensureFontLoaded();
+            await this.generateImagesBatch(items);
             this.displayResults();
         } catch (error) {
             console.error('Failed to regenerate images:', error);
+        } finally {
+            this.isGenerating = false;
         }
     }
 
