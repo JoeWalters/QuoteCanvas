@@ -1,6 +1,133 @@
 // App version - updated automatically by GitHub Actions
 const APP_VERSION = 'dev';
 
+// ---- Pure filename helpers (module scope; used by the app and by node:test) ----
+
+function formatDate(date, format) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    switch (format) {
+        case 'MM-DD-YYYY':
+            return `${month}-${day}-${year}`;
+        case 'DD-MM-YYYY':
+            return `${day}-${month}-${year}`;
+        case 'YYYYMMDD':
+            return `${year}${month}${day}`;
+        case 'YYYY-MM-DD':
+        default:
+            return `${year}-${month}-${day}`;
+    }
+}
+
+function formatTime(date, format) {
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+
+    switch (format) {
+        case 'HH-MM':
+            return `${hours}-${minutes}`;
+        case 'HHMMSS':
+            return `${hours}${minutes}${seconds}`;
+        case 'HHMM':
+            return `${hours}${minutes}`;
+        case 'HH-MM-SS':
+        default:
+            return `${hours}-${minutes}-${seconds}`;
+    }
+}
+
+// NFKD-decompose and strip combining marks so accented chars become ASCII
+// (é -> e), then drop invalid filesystem characters, collapse whitespace and
+// underscore runs to '-', keep only [A-Za-z0-9._-], collapse repeated '-', and
+// trim leading/trailing '-' and '.' so no dotfiles or stray hyphens remain.
+function sanitizeForFilename(text) {
+    return String(text)
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '') // strip combining marks
+        .replace(/[<>:"/\\|?*\x00-\x1f]/g, '') // remove invalid chars
+        .replace(/[\s_]+/g, '-') // whitespace/underscore runs -> hyphen
+        .replace(/[^\w\-_.]/g, '') // keep only alphanumeric, hyphens, underscores, dots
+        .replace(/-+/g, '-') // collapse repeated hyphens
+        .replace(/^-+|-+$/g, '') // trim leading/trailing hyphens
+        .replace(/^\.+|\.+$/g, ''); // trim leading/trailing dots
+}
+
+function formatToExtension(mimeOrFormat) {
+    const value = String(mimeOrFormat).toLowerCase();
+    if (value === 'image/jpeg' || value === 'jpeg') return 'jpg';
+    if (value === 'image/webp' || value === 'webp') return 'webp';
+    return 'png';
+}
+
+// Remove one trailing image extension (case-insensitive). A dot in the middle
+// of a name (e.g. my.quote) is preserved.
+function stripImageExtension(name) {
+    return String(name).replace(/\.(png|jpe?g|webp|gif|bmp|svg)$/i, '');
+}
+
+// Build the base filename from the naming pattern (no extension logic here).
+function buildFilename(options) {
+    const pattern = options.pattern || 'quote-{index}';
+    const indexStart = options.indexStart || 1;
+    const indexPadding = options.indexPadding || 0;
+    const quoteMaxLength = options.quoteMaxLength || 30;
+    const dateFormat = options.dateFormat;
+    const timeFormat = options.timeFormat;
+    const now = options.now || new Date();
+    const index = options.index;
+    const quote = options.quote;
+
+    const actualIndex = index + indexStart;
+    const paddedIndex = indexPadding > 0 ?
+        actualIndex.toString().padStart(indexPadding, '0') :
+        actualIndex.toString();
+
+    const cleanQuote = sanitizeForFilename(quote)
+        .substring(0, quoteMaxLength)
+        .trim();
+
+    const formattedDate = formatDate(now, dateFormat);
+    const formattedTime = formatTime(now, timeFormat);
+    const timestamp = Math.floor(now.getTime() / 1000);
+
+    let filename = pattern
+        .replace(/\{index\}/g, paddedIndex)
+        .replace(/\{quote\}/g, cleanQuote)
+        .replace(/\{date\}/g, formattedDate)
+        .replace(/\{time\}/g, formattedTime)
+        .replace(/\{timestamp\}/g, timestamp.toString());
+
+    return sanitizeForFilename(filename);
+}
+
+// Return distinct names for a list of { filename } (or { name }) items. A
+// repeated base name gets -2, -3, ... inserted before the extension, comparing
+// case-insensitively, first-come-first-served.
+function dedupeZipNames(items) {
+    const used = new Set();
+    const result = [];
+    for (const item of items) {
+        const name = String(item.filename != null ? item.filename : item.name);
+        const extMatch = name.match(/\.([^.\s]+)$/);
+        const base = extMatch ? name.slice(0, name.length - extMatch[0].length) : name;
+        const ext = extMatch ? extMatch[0] : '';
+        let candidate = name;
+        let n = 1;
+        // Check the RESULT set, not just how often the original name appeared:
+        // a suffix can itself collide with a name that is already taken.
+        while (used.has(candidate.toLowerCase())) {
+            n += 1;
+            candidate = `${base}-${n}${ext}`;
+        }
+        used.add(candidate.toLowerCase());
+        result.push(candidate);
+    }
+    return result;
+}
+
 class QuoteCanvas {
     constructor() {
         this.quotes = [];
@@ -20,6 +147,8 @@ class QuoteCanvas {
         this.isTouchMode = false;
         this.isGenerating = false;
         this.isPaused = false;
+        this.wasCancelled = false;
+        this.loadedFontSpecs = new Set();
         this.generationStats = {
             startTime: null,
             imagesGenerated: 0,
@@ -30,13 +159,36 @@ class QuoteCanvas {
         // Settings persistence
         this.settings = {
             autoSave: true,
-            previewQuality: 'medium',
-            touchMode: true,
+            touchMode: window.matchMedia ? window.matchMedia('(pointer: coarse)').matches : false,
             theme: 'dark'
         };
+
+        // Every control that belongs to a saved design. Keep this list in sync
+        // with index.html; collectDesign()/applyDesign() drive persistence,
+        // export/import and presets from it.
+        this.designFields = [
+            'image-width', 'image-height', 'font-family', 'font-size', 'font-weight',
+            'text-color', 'background-color', 'text-align', 'padding',
+            'overlay-opacity', 'text-shadow', 'shadow-color', 'shadow-opacity',
+            'line-height', 'bg-blur', 'bg-brightness', 'bg-contrast', 'bg-saturation',
+            'bg-filter', 'vignette-strength', 'gradient-overlay', 'gradient-color1',
+            'gradient-color2', 'export-format', 'jpeg-quality', 'export-resolution',
+            'zip-compression', 'naming-pattern', 'index-start', 'index-padding',
+            'quote-max-length', 'date-format', 'time-format'
+        ];
+        this.designStyleButtons = [
+            { id: 'font-bold', style: 'bold' },
+            { id: 'font-italic', style: 'italic' },
+            { id: 'font-underline', style: 'underline' }
+        ];
+        this.designSaveTimer = null;
+        this.isApplyingDesign = false;
+        this.toastTimer = null;
         
         this.initializeElements();
+        this.designDefaults = this.collectDesign();
         this.loadSettings();
+        this.loadDesign();
         this.bindEvents();
         this.setupCanvas();
         this.setupDragAndDrop();
@@ -126,8 +278,8 @@ class QuoteCanvas {
         this.settingsPanel = document.getElementById('settings-panel');
         this.performancePanel = document.getElementById('performance-panel');
         
-        // Tab navigation
-        this.tabBtns = document.querySelectorAll('.tab-btn');
+        // Workflow navigation (the step buttons are also the tabs)
+        this.tabBtns = document.querySelectorAll('[data-tab]');
         this.tabContents = document.querySelectorAll('.tab-content');
         
         // Enhanced preview controls
@@ -178,11 +330,21 @@ class QuoteCanvas {
         
         // Settings controls
         this.autoSaveSettings = document.getElementById('auto-save-settings');
-        this.previewQuality = document.getElementById('preview-quality');
         this.touchMode = document.getElementById('touch-mode');
+        this.designPreset = document.getElementById('design-preset');
         this.saveSettingsBtn = document.getElementById('save-settings-btn');
+        this.exportSettingsBtn = document.getElementById('export-settings-btn');
+        this.importSettingsBtn = document.getElementById('import-settings-btn');
+        this.importSettingsFile = document.getElementById('import-settings-file');
         this.resetSettingsBtn = document.getElementById('reset-settings-btn');
         
+        // Sticky preview + toast
+        this.workspace = document.getElementById('workspace');
+        this.workspaceAside = document.getElementById('workspace-aside');
+        this.previewDock = document.getElementById('preview-dock');
+        this.dockCanvas = document.getElementById('dock-canvas');
+        this.toast = document.getElementById('toast');
+
         // Performance monitoring elements
         this.memoryUsage = document.getElementById('memory-usage');
         this.cacheSize = document.getElementById('cache-size');
@@ -260,7 +422,28 @@ class QuoteCanvas {
         
         // Tab navigation
         this.tabBtns.forEach(btn => {
-            btn.addEventListener('click', (e) => this.switchTab(e.target.dataset.tab));
+            btn.addEventListener('click', (e) => this.switchTab(e.currentTarget.dataset.tab));
+        });
+
+        // Design persistence: one listener covers every saved control.
+        this.designFields.forEach((id) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const onChange = () => {
+                if (this.isApplyingDesign) return;
+                if (this.designPreset) this.designPreset.value = '';
+                this.scheduleDesignSave();
+            };
+            el.addEventListener('input', onChange);
+            el.addEventListener('change', onChange);
+        });
+
+        // Sticky preview opens the full preview
+        this.previewDock.addEventListener('click', () => {
+            this.switchTab('export-tab');
+            requestAnimationFrame(() => {
+                document.querySelector('.preview-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
         });
         
         // Enhanced preview controls
@@ -320,7 +503,20 @@ class QuoteCanvas {
         
         // Settings
         this.touchMode.addEventListener('change', () => this.toggleTouchMode());
-        this.saveSettingsBtn.addEventListener('click', () => this.saveSettings());
+        this.autoSaveSettings.addEventListener('change', () => {
+            this.settings.autoSave = this.autoSaveSettings.checked;
+            this.saveSettings();
+            if (this.settings.autoSave) this.saveDesign();
+        });
+        this.designPreset.addEventListener('change', () => this.applyDesignPreset(this.designPreset.value));
+        this.saveSettingsBtn.addEventListener('click', () => {
+            this.saveSettings();
+            this.saveDesign();
+            this.showToast('Settings saved');
+        });
+        this.exportSettingsBtn.addEventListener('click', () => this.exportDesign());
+        this.importSettingsBtn.addEventListener('click', () => this.importSettingsFile.click());
+        this.importSettingsFile.addEventListener('change', (e) => this.handleDesignImport(e));
         this.resetSettingsBtn.addEventListener('click', () => this.resetSettings());
         
         // Keyboard shortcuts
@@ -367,93 +563,31 @@ class QuoteCanvas {
     }
 
     generateFilename(index, quote) {
-        const pattern = this.namingPatternInput.value || 'quote-{index}';
         const indexStart = parseInt(this.indexStartInput.value) || 1;
         const indexPadding = parseInt(this.indexPaddingInput.value) || 0;
-        const quoteMaxLength = parseInt(this.quoteMaxLengthInput.value) || 30;
-        const dateFormat = this.dateFormatSelect.value;
-        const timeFormat = this.timeFormatSelect.value;
-
-        const now = new Date();
         const actualIndex = index + indexStart;
-        
-        // Pad index with zeros if requested
-        const paddedIndex = indexPadding > 0 ? 
-            actualIndex.toString().padStart(indexPadding, '0') : 
+        const paddedIndex = indexPadding > 0 ?
+            actualIndex.toString().padStart(indexPadding, '0') :
             actualIndex.toString();
 
-        // Clean quote text for filename
-        const cleanQuote = this.sanitizeForFilename(quote)
-            .substring(0, quoteMaxLength)
-            .trim();
+        const base = buildFilename({
+            pattern: this.namingPatternInput.value || 'quote-{index}',
+            indexStart,
+            indexPadding,
+            quoteMaxLength: parseInt(this.quoteMaxLengthInput.value) || 30,
+            dateFormat: this.dateFormatSelect.value,
+            timeFormat: this.timeFormatSelect.value,
+            index,
+            quote
+        });
 
-        // Format date
-        const formattedDate = this.formatDate(now, dateFormat);
-        
-        // Format time
-        const formattedTime = this.formatTime(now, timeFormat);
-        
-        // Unix timestamp
-        const timestamp = Math.floor(now.getTime() / 1000);
+        // A pattern may already carry an image extension; strip it so we never
+        // produce a doubled extension. Then fall back to a deterministic name
+        // when the sanitised base is empty (e.g. a CJK/emoji-only quote).
+        const stripped = stripImageExtension(base);
+        const safeBase = stripped.length > 0 ? stripped : `quote-${paddedIndex}`;
 
-        // Replace variables in pattern
-        let filename = pattern
-            .replace(/\{index\}/g, paddedIndex)
-            .replace(/\{quote\}/g, cleanQuote)
-            .replace(/\{date\}/g, formattedDate)
-            .replace(/\{time\}/g, formattedTime)
-            .replace(/\{timestamp\}/g, timestamp.toString());
-
-        // Clean filename
-        filename = this.sanitizeForFilename(filename);
-        
-        return filename + '.png';
-    }
-
-    sanitizeForFilename(text) {
-        // Remove or replace characters that are invalid in filenames
-        return text
-            .replace(/[<>:"/\\|?*\x00-\x1f]/g, '') // Remove invalid chars
-            .replace(/\s+/g, '-') // Replace spaces with hyphens
-            .replace(/[^\w\-_.]/g, '') // Keep only alphanumeric, hyphens, underscores, and dots
-            .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
-            .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
-    }
-
-    formatDate(date, format) {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-
-        switch (format) {
-            case 'MM-DD-YYYY':
-                return `${month}-${day}-${year}`;
-            case 'DD-MM-YYYY':
-                return `${day}-${month}-${year}`;
-            case 'YYYYMMDD':
-                return `${year}${month}${day}`;
-            case 'YYYY-MM-DD':
-            default:
-                return `${year}-${month}-${day}`;
-        }
-    }
-
-    formatTime(date, format) {
-        const hours = String(date.getHours()).padStart(2, '0');
-        const minutes = String(date.getMinutes()).padStart(2, '0');
-        const seconds = String(date.getSeconds()).padStart(2, '0');
-
-        switch (format) {
-            case 'HH-MM':
-                return `${hours}-${minutes}`;
-            case 'HHMMSS':
-                return `${hours}${minutes}${seconds}`;
-            case 'HHMM':
-                return `${hours}${minutes}`;
-            case 'HH-MM-SS':
-            default:
-                return `${hours}-${minutes}-${seconds}`;
-        }
+        return safeBase + '.' + formatToExtension(this.getImageFormat());
     }
 
     // Enhanced accordion functionality
@@ -476,6 +610,7 @@ class QuoteCanvas {
         this.isDarkTheme = !this.isDarkTheme;
         document.body.classList.toggle('dark-theme', this.isDarkTheme);
         this.themeToggle.textContent = this.isDarkTheme ? '☀️' : '🌙';
+        this.themeToggle.setAttribute('aria-pressed', String(this.isDarkTheme));
         this.settings.theme = this.isDarkTheme ? 'dark' : 'light';
         if (this.settings.autoSave) this.saveSettings();
     }
@@ -484,19 +619,31 @@ class QuoteCanvas {
     togglePanel(type) {
         const panel = type === 'settings' ? this.settingsPanel : this.performancePanel;
         const otherPanel = type === 'settings' ? this.performancePanel : this.settingsPanel;
+        const toggle = type === 'settings' ? this.settingsToggle : this.performanceToggle;
         
         // Close other panel
         otherPanel.style.display = 'none';
+        const otherToggle = type === 'settings' ? this.performanceToggle : this.settingsToggle;
+        otherToggle.setAttribute('aria-expanded', 'false');
         
         // Toggle current panel
-        panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+        const willOpen = panel.style.display !== 'block';
+        panel.style.display = willOpen ? 'block' : 'none';
+        toggle.setAttribute('aria-expanded', String(willOpen));
     }
     
     // Tab navigation
     switchTab(tabId) {
+        const target = document.querySelector(`[data-tab="${tabId}"]`);
+        if (!target) return;
+
         // Update buttons
-        this.tabBtns.forEach(btn => btn.classList.remove('active'));
-        document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
+        this.tabBtns.forEach(btn => {
+            btn.classList.remove('active');
+            btn.removeAttribute('aria-current');
+        });
+        target.classList.add('active');
+        target.setAttribute('aria-current', 'step');
         
         // Update content
         this.tabContents.forEach(content => content.classList.remove('active'));
@@ -504,13 +651,14 @@ class QuoteCanvas {
         
         this.currentTab = tabId;
         
+        // Update progress indicator
+        this.updateProgressIndicator(tabId);
+        this.updateDockVisibility();
+
         // Update preview if switching to export tab
         if (tabId === 'export-tab') {
             setTimeout(() => this.updatePreview(), 100);
         }
-        
-        // Update progress indicator
-        this.updateProgressIndicator(tabId);
     }
     
     updateProgressIndicator(activeTabId) {
@@ -528,7 +676,11 @@ class QuoteCanvas {
             step.classList.remove('active', 'completed');
             if (index + 1 === currentStep) {
                 step.classList.add('active');
-            } else if (index + 1 < currentStep) {
+                step.setAttribute('aria-current', 'step');
+            } else {
+                step.removeAttribute('aria-current');
+            }
+            if (index + 1 < currentStep) {
                 step.classList.add('completed');
             }
         });
@@ -536,6 +688,38 @@ class QuoteCanvas {
         // Update progress line
         const progressWidth = ((currentStep - 1) / 3) * 100;
         document.querySelector('.progress-line').style.setProperty('--progress-width', progressWidth + '%');
+    }
+
+    // Sticky mini preview shown while editing design/effects
+    updateDockVisibility() {
+        if (!this.previewDock) return;
+        const show = (this.currentTab === 'design-tab' || this.currentTab === 'effects-tab')
+            && this.quotes.length > 0;
+        this.previewDock.hidden = !show;
+        if (this.workspaceAside) this.workspaceAside.hidden = !show;
+        if (this.workspace) this.workspace.classList.toggle('has-dock', show);
+        if (show) this.syncDockPreview();
+    }
+
+    syncDockPreview() {
+        if (!this.dockCanvas || !this.previewDock || this.previewDock.hidden) return;
+        const source = this.previewCanvas;
+        if (!source.width || !source.height) return;
+
+        const maxWidth = 480;
+        const maxHeight = 480;
+        const scale = Math.min(maxWidth / source.width, maxHeight / source.height, 1);
+        const width = Math.max(1, Math.round(source.width * scale));
+        const height = Math.max(1, Math.round(source.height * scale));
+
+        if (this.dockCanvas.width !== width || this.dockCanvas.height !== height) {
+            this.dockCanvas.width = width;
+            this.dockCanvas.height = height;
+        }
+
+        const ctx = this.dockCanvas.getContext('2d');
+        ctx.clearRect(0, 0, width, height);
+        ctx.drawImage(source, 0, 0, width, height);
     }
     
     // Enhanced preview controls
@@ -634,7 +818,7 @@ class QuoteCanvas {
     }
     
     applySettings() {
-        // Apply theme (dark is now the default)
+        // Apply theme (dark is the default)
         if (this.settings.theme === 'dark') {
             this.isDarkTheme = true;
             document.body.classList.add('dark-theme');
@@ -644,28 +828,203 @@ class QuoteCanvas {
             document.body.classList.remove('dark-theme');
             this.themeToggle.textContent = '🌙';
         }
+        this.themeToggle.setAttribute('aria-pressed', String(this.isDarkTheme));
         
-        // Apply touch mode
-        if (this.settings.touchMode) {
-            this.isTouchMode = true;
-            this.touchMode.checked = true;
-            document.body.classList.add('touch-mode');
-        }
+        // Apply touch mode (a checkbox state, not an append-only class)
+        this.isTouchMode = Boolean(this.settings.touchMode);
+        this.touchMode.checked = this.isTouchMode;
+        document.body.classList.toggle('touch-mode', this.isTouchMode);
         
         // Apply other settings
         this.autoSaveSettings.checked = this.settings.autoSave;
-        this.previewQuality.value = this.settings.previewQuality;
     }
     
     resetSettings() {
         this.settings = {
             autoSave: true,
-            previewQuality: 'medium',
-            touchMode: true,
+            touchMode: window.matchMedia ? window.matchMedia('(pointer: coarse)').matches : false,
             theme: 'dark'
         };
         localStorage.removeItem('quotecanvas-settings');
-        location.reload(); // Refresh to apply reset
+        localStorage.removeItem('quotecanvas-design');
+        this.applySettings();
+        this.resetDesign();
+        this.showToast('Settings reset to defaults');
+    }
+
+    // ---- Design persistence, import/export and presets -------------------
+
+    collectDesign() {
+        const design = {};
+        this.designFields.forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) design[id] = el.value;
+        });
+        this.designStyleButtons.forEach(({ id, style }) => {
+            const btn = document.getElementById(id);
+            design[`style-${style}`] = Boolean(btn && btn.classList.contains('active'));
+        });
+        return design;
+    }
+
+    applyDesign(design) {
+        if (!design || typeof design !== 'object') return;
+
+        this.isApplyingDesign = true;
+        try {
+            this.designFields.forEach((id) => {
+                if (!Object.prototype.hasOwnProperty.call(design, id)) return;
+                const el = document.getElementById(id);
+                if (el) el.value = design[id];
+            });
+            this.designStyleButtons.forEach(({ id, style }) => {
+                const btn = document.getElementById(id);
+                if (btn) btn.classList.toggle('active', Boolean(design[`style-${style}`]));
+            });
+        } finally {
+            this.isApplyingDesign = false;
+        }
+
+        this.syncControlLabels();
+        this.updatePreview();
+    }
+
+    syncControlLabels() {
+        this.fontSizeValue.textContent = `${this.fontSizeInput.value}px`;
+        this.paddingValue.textContent = `${this.paddingInput.value}px`;
+        this.overlayOpacityValue.textContent = `${this.overlayOpacityInput.value}%`;
+        this.shadowOpacityValue.textContent = `${this.shadowOpacityInput.value}%`;
+        this.lineHeightValue.textContent = (this.lineHeightInput.value / 100).toFixed(1);
+        this.bgBlurValue.textContent = `${this.bgBlur.value}px`;
+        this.bgBrightnessValue.textContent = `${this.bgBrightness.value}%`;
+        this.bgContrastValue.textContent = `${this.bgContrast.value}%`;
+        this.bgSaturationValue.textContent = `${this.bgSaturation.value}%`;
+        this.vignetteValue.textContent = `${this.vignetteStrength.value}%`;
+        this.jpegQualityValue.textContent = `${this.jpegQuality.value}%`;
+        this.toggleFormatControls();
+        this.toggleGradientControls();
+        this.updateNamingPreview();
+    }
+
+    loadDesign() {
+        try {
+            const saved = localStorage.getItem('quotecanvas-design');
+            if (saved) this.applyDesign(JSON.parse(saved));
+        } catch (error) {
+            console.warn('Failed to load design:', error);
+        }
+    }
+
+    saveDesign() {
+        if (this.isApplyingDesign) return;
+        try {
+            localStorage.setItem('quotecanvas-design', JSON.stringify(this.collectDesign()));
+        } catch (error) {
+            console.warn('Failed to save design:', error);
+        }
+    }
+
+    scheduleDesignSave() {
+        if (!this.settings.autoSave) return;
+        clearTimeout(this.designSaveTimer);
+        this.designSaveTimer = setTimeout(() => this.saveDesign(), 250);
+    }
+
+    applyDesignPreset(name) {
+        const presets = {
+            classic: {
+                'font-family': 'Playfair Display', 'font-size': '56', 'font-weight': '600',
+                'text-color': '#ffffff', 'background-color': '#2c3e50', 'text-align': 'center',
+                'padding': '70', 'overlay-opacity': '45', 'text-shadow': 'soft',
+                'shadow-color': '#000000', 'shadow-opacity': '55', 'line-height': '140',
+                'bg-blur': '0', 'bg-brightness': '100', 'bg-contrast': '100',
+                'bg-saturation': '100', 'bg-filter': 'none', 'vignette-strength': '0',
+                'gradient-overlay': 'none', 'export-format': 'png'
+            },
+            editorial: {
+                'font-family': 'Playfair Display', 'font-size': '72', 'font-weight': '700',
+                'text-color': '#f5f1e6', 'background-color': '#1c1c1c', 'text-align': 'left',
+                'padding': '90', 'overlay-opacity': '35', 'text-shadow': 'none',
+                'shadow-color': '#000000', 'shadow-opacity': '45', 'line-height': '120',
+                'bg-blur': '0', 'bg-brightness': '90', 'bg-contrast': '110',
+                'bg-saturation': '80', 'bg-filter': 'grayscale', 'vignette-strength': '25',
+                'gradient-overlay': 'dark-bottom', 'export-format': 'jpeg'
+            },
+            minimal: {
+                'font-family': 'Inter', 'font-size': '44', 'font-weight': '400',
+                'text-color': '#1a1a1a', 'background-color': '#f5f5f2', 'text-align': 'center',
+                'padding': '80', 'overlay-opacity': '0', 'text-shadow': 'none',
+                'shadow-color': '#000000', 'shadow-opacity': '35', 'line-height': '150',
+                'bg-blur': '0', 'bg-brightness': '100', 'bg-contrast': '100',
+                'bg-saturation': '100', 'bg-filter': 'none', 'vignette-strength': '0',
+                'gradient-overlay': 'none', 'export-format': 'png'
+            }
+        };
+
+        const preset = presets[name];
+        if (!preset) {
+            this.designPreset.value = '';
+            return;
+        }
+
+        this.applyDesign({ ...this.collectDesign(), ...preset });
+        this.designPreset.value = name;
+        this.saveDesign();
+        this.showToast(`Applied "${this.designPreset.selectedOptions[0].textContent}" preset`);
+    }
+
+    exportDesign() {
+        const payload = {
+            app: 'QuoteCanvas',
+            version: APP_VERSION,
+            exportedAt: new Date().toISOString(),
+            design: this.collectDesign()
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `quotecanvas-design-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        this.showToast('Design exported');
+    }
+
+    async handleDesignImport(event) {
+        const file = event.target.files && event.target.files[0];
+        event.target.value = '';
+        if (!file) return;
+
+        try {
+            const parsed = JSON.parse(await file.text());
+            const design = parsed && parsed.design ? parsed.design : parsed;
+            if (!design || typeof design !== 'object') {
+                throw new Error('No design object found');
+            }
+            this.applyDesign(design);
+            this.saveDesign();
+            this.designPreset.value = '';
+            this.showToast('Design imported');
+        } catch (error) {
+            console.error('Failed to import design:', error);
+            this.showToast('Could not import that file', 'error');
+        }
+    }
+
+    resetDesign() {
+        this.applyDesign(this.designDefaults || {});
+        if (this.designPreset) this.designPreset.value = '';
+    }
+
+    showToast(message, type = 'info') {
+        if (!this.toast) return;
+        this.toast.textContent = message;
+        this.toast.classList.toggle('error', type === 'error');
+        this.toast.classList.add('visible');
+        clearTimeout(this.toastTimer);
+        this.toastTimer = setTimeout(() => this.toast.classList.remove('visible'), 2600);
     }
     
     // Drag and drop enhancements
@@ -1022,20 +1381,6 @@ class QuoteCanvas {
         });
     }
 
-    loadImage(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = e => {
-                const img = new Image();
-                img.onload = () => resolve(img);
-                img.onerror = reject;
-                img.src = e.target.result;
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
-    }
-
     loadImageFromFile(file) {
         return new Promise((resolve, reject) => {
             const img = new Image();
@@ -1087,6 +1432,7 @@ class QuoteCanvas {
         this.generateCurrentBtn.disabled = this.quotes.length === 0;
         
         this.updateNamingPreview();
+        this.updateDockVisibility();
     }
 
     previousQuote() {
@@ -1108,12 +1454,27 @@ class QuoteCanvas {
     updatePreview() {
         if (this.quotes.length === 0) {
             this.clearCanvas();
+            this.updateDockVisibility();
             return;
         }
         
+        // Never paint a fallback face: if the selected font has not been loaded
+        // yet, wait for it and then draw once. `ensureFontLoaded` caches the spec
+        // even when the load fails, so this cannot wait forever.
+        const spec = this.getCanvasFontString();
+        if (document.fonts && !this.loadedFontSpecs.has(spec)) {
+            this.ensureFontLoaded().then(() => this.drawPreviewNow());
+        } else {
+            this.drawPreviewNow();
+        }
+        
+        this.updateCurrentQuoteText();
+        this.updateDockVisibility();
+    }
+    
+    drawPreviewNow() {
         this.updateCanvasSize();
         this.drawQuoteImageWithEffects(this.currentQuoteIndex);
-        this.updateCurrentQuoteText();
     }
     
     updateCurrentQuoteText() {
@@ -1262,23 +1623,38 @@ class QuoteCanvas {
         }
     }
     
-    drawQuoteText(ctx, quote, width, height) {
+    getCanvasFontString() {
         const fontSize = parseInt(this.fontSizeInput.value);
         const fontFamily = this.fontFamilySelect.value;
         const fontWeight = this.fontWeightSelect.value;
+        let fontStyle = '';
+        if (this.fontItalicBtn.classList.contains('active')) {
+            fontStyle += 'italic ';
+        }
+        return `${fontStyle}${fontWeight} ${fontSize}px "${fontFamily}"`;
+    }
+    
+    async ensureFontLoaded() {
+        if (!document.fonts) return;
+        const spec = this.getCanvasFontString();
+        if (this.loadedFontSpecs.has(spec)) return;
+        try {
+            await document.fonts.load(spec);
+        } catch (error) {
+            // Ignore load failures; the spec is cached so the redraw terminates.
+        }
+        this.loadedFontSpecs.add(spec);
+    }
+    
+    drawQuoteText(ctx, quote, width, height) {
+        const fontSize = parseInt(this.fontSizeInput.value);
         const textColor = this.textColorInput.value;
         const textAlign = this.textAlignSelect.value;
         const padding = parseInt(this.paddingInput.value);
         const lineHeightMultiplier = parseInt(this.lineHeightInput.value) / 100;
         
-        // Build font string with weight and style
-        let fontStyle = '';
-        if (this.fontItalicBtn.classList.contains('active')) {
-            fontStyle += 'italic ';
-        }
-        
         ctx.fillStyle = textColor;
-        ctx.font = `${fontStyle}${fontWeight} ${fontSize}px "${fontFamily}"`;
+        ctx.font = this.getCanvasFontString();
         ctx.textAlign = textAlign;
         ctx.textBaseline = 'middle';
         
@@ -1366,147 +1742,6 @@ class QuoteCanvas {
         this.ctx.clearRect(0, 0, this.previewCanvas.width, this.previewCanvas.height);
     }
 
-    // Legacy method - now redirects to enhanced version
-    drawQuoteImage(quoteIndex, canvas = null, context = null) {
-        this.drawQuoteImageWithEffects(quoteIndex, canvas, context);
-    }
-
-    // Removed - functionality merged into drawQuoteImageWithEffects
-
-    // Removed - functionality merged into drawQuoteImageForGeneration
-
-    async drawQuoteImageMemoryEfficient(quoteIndex, canvas, context, backgroundImg) {
-        const targetCanvas = canvas || this.previewCanvas;
-        const targetCtx = context || this.ctx;
-        
-        const width = targetCanvas.width;
-        const height = targetCanvas.height;
-        const quote = this.quotes[quoteIndex];
-        
-        // Clear canvas
-        targetCtx.clearRect(0, 0, width, height);
-        
-        // Draw background with memory-efficient approach
-        if (backgroundImg && backgroundImg.complete && backgroundImg.naturalWidth > 0) {
-            try {
-                targetCtx.drawImage(backgroundImg, 0, 0, width, height);
-                
-                // Add overlay for text readability
-                const overlayOpacity = parseInt(this.overlayOpacityInput.value) / 100;
-                targetCtx.fillStyle = `rgba(0, 0, 0, ${overlayOpacity})`;
-                targetCtx.fillRect(0, 0, width, height);
-            } catch (error) {
-                console.warn(`Failed to draw background for quote ${quoteIndex + 1}, using solid color:`, error);
-                // Fall back to solid background
-                targetCtx.fillStyle = this.backgroundColorInput.value;
-                targetCtx.fillRect(0, 0, width, height);
-            }
-        } else {
-            // Solid background color
-            targetCtx.fillStyle = this.backgroundColorInput.value;
-            targetCtx.fillRect(0, 0, width, height);
-        }
-        
-        // Draw text (same as original method)
-        const fontSize = parseInt(this.fontSizeInput.value);
-        const fontFamily = this.fontFamilySelect.value;
-        const fontWeight = this.fontWeightSelect.value;
-        const textColor = this.textColorInput.value;
-        const textAlign = this.textAlignSelect.value;
-        const padding = parseInt(this.paddingInput.value);
-        const lineHeightMultiplier = parseInt(this.lineHeightInput.value) / 100;
-        
-        // Build font string with weight and style
-        let fontStyle = '';
-        if (this.fontItalicBtn.classList.contains('active')) {
-            fontStyle += 'italic ';
-        }
-        
-        targetCtx.fillStyle = textColor;
-        targetCtx.font = `${fontStyle}${fontWeight} ${fontSize}px "${fontFamily}"`;
-        targetCtx.textAlign = textAlign;
-        targetCtx.textBaseline = 'middle';
-        
-        // Apply text shadow
-        this.applyTextShadow(targetCtx);
-        
-        // Text wrapping
-        const maxWidth = width - (padding * 2);
-        const lines = this.wrapText(targetCtx, quote, maxWidth);
-        const lineHeight = fontSize * lineHeightMultiplier;
-        const totalTextHeight = lines.length * lineHeight;
-        
-        // Center text vertically
-        let startY = (height - totalTextHeight) / 2 + lineHeight / 2;
-        
-        // Set x position based on alignment
-        let x;
-        switch (textAlign) {
-            case 'left':
-                x = padding;
-                break;
-            case 'right':
-                x = width - padding;
-                break;
-            default: // center
-                x = width / 2;
-                break;
-        }
-        
-        // Draw each line
-        lines.forEach((line, index) => {
-            const y = startY + (index * lineHeight);
-            
-            // Draw text outline if selected
-            if (this.textShadowSelect.value === 'outline') {
-                const shadowOpacity = parseInt(this.shadowOpacityInput.value) / 100;
-                const shadowColor = this.shadowColorInput.value;
-                
-                targetCtx.save();
-                targetCtx.strokeStyle = this.hexToRgba(shadowColor, shadowOpacity);
-                targetCtx.lineWidth = Math.max(1, fontSize * 0.03);
-                targetCtx.lineJoin = 'round';
-                targetCtx.strokeText(line, x, y);
-                targetCtx.restore();
-            }
-            
-            // Draw underline if active
-            if (this.fontUnderlineBtn.classList.contains('active')) {
-                const textMetrics = targetCtx.measureText(line);
-                const underlineY = y + fontSize * 0.1;
-                const underlineThickness = Math.max(1, fontSize * 0.05);
-                
-                targetCtx.save();
-                targetCtx.strokeStyle = textColor;
-                targetCtx.lineWidth = underlineThickness;
-                targetCtx.beginPath();
-                
-                let underlineX, underlineWidth;
-                switch (textAlign) {
-                    case 'left':
-                        underlineX = x;
-                        underlineWidth = textMetrics.width;
-                        break;
-                    case 'right':
-                        underlineX = x - textMetrics.width;
-                        underlineWidth = textMetrics.width;
-                        break;
-                    default: // center
-                        underlineX = x - textMetrics.width / 2;
-                        underlineWidth = textMetrics.width;
-                        break;
-                }
-                
-                targetCtx.moveTo(underlineX, underlineY);
-                targetCtx.lineTo(underlineX + underlineWidth, underlineY);
-                targetCtx.stroke();
-                targetCtx.restore();
-            }
-            
-            targetCtx.fillText(line, x, y);
-        });
-    }
-
     wrapText(ctx, text, maxWidth) {
         const words = text.split(' ');
         const lines = [];
@@ -1544,10 +1779,11 @@ class QuoteCanvas {
         
         this.isGenerating = true;
         this.isPaused = false;
+        this.wasCancelled = false;
         this.failedImages = [];
         
         const totalQuotes = this.quotes.length;
-        const quotesToGenerate = this.quotes;
+        const items = this.quotes.map((quote, index) => ({ index, quote }));
         
         this.generationStats = {
             startTime: Date.now(),
@@ -1557,16 +1793,25 @@ class QuoteCanvas {
         };
         
         this.showGenerationUI(true);
-        this.generatedImages = [];
+        this.releaseGeneratedImages();
         
         try {
-            await this.generateImagesBatch(quotesToGenerate);
-            this.displayResults();
+            await this.ensureFontLoaded();
+            await this.generateImagesBatch(items);
+            if (this.generatedImages.length > 0 || !this.wasCancelled) {
+                this.displayResults();
+            } else {
+                this.progressDetails.textContent = `⏹️ Cancelled — 0 of ${totalQuotes} generated`;
+            }
         } catch (error) {
             console.error('Generation failed:', error);
             this.progressDetails.textContent = 'Generation failed: ' + error.message;
         } finally {
-            this.showGenerationUI(false);
+            // Leave the progress container visible so the cancelled/failed/success
+            // summary is actually readable; `showGenerationSummary` hides it after 5s
+            // and a failure message should stay until the next run.
+            this.generateAllBtn.disabled = false;
+            this.generateCurrentBtn.disabled = false;
             this.isGenerating = false;
         }
     }
@@ -1577,11 +1822,11 @@ class QuoteCanvas {
         this.generateCurrentBtn.disabled = show;
     }
     
-    async generateImagesBatch(quotes) {
+    async generateImagesBatch(items) {
         const width = parseInt(this.imageWidthInput.value);
         const height = parseInt(this.imageHeightInput.value);
         
-        for (let i = 0; i < quotes.length; i++) {
+        for (let i = 0; i < items.length; i++) {
             if (!this.isGenerating) break; // Cancelled
             
             while (this.isPaused) {
@@ -1589,11 +1834,12 @@ class QuoteCanvas {
             }
             
             try {
-                const actualIndex = i;
-                const quote = quotes[i];
+                const item = items[i];
+                const actualIndex = item.index;
+                const quote = item.quote;
                 
                 // Update progress
-                this.updateGenerationProgress(i + 1, quotes.length, quote);
+                this.updateGenerationProgress(i + 1, items.length, quote);
                 
                 // Create temporary canvas for generation
                 const canvas = document.createElement('canvas');
@@ -1618,14 +1864,16 @@ class QuoteCanvas {
                 const blob = await this.canvasToBlob(canvas);
                 const imageData = {
                     blob: blob,
-                    dataUrl: canvas.toDataURL(this.getImageFormat(), this.getImageQuality()),
+                    objectUrl: URL.createObjectURL(blob),
                     filename: this.generateFilename(actualIndex, quote),
                     quote: quote,
                     index: actualIndex,
+                    width: width,
+                    height: height,
                     success: true
                 };
                 
-                this.generatedImages.push(imageData);
+                this.setGeneratedImage(imageData);
                 this.generationStats.imagesGenerated++;
                 
                 // Cleanup
@@ -1641,8 +1889,8 @@ class QuoteCanvas {
             } catch (error) {
                 console.error(`Error generating image ${i + 1}:`, error);
                 this.failedImages.push({
-                    index: startIndex + i,
-                    quote: quotes[i],
+                    index: items[i].index,
+                    quote: items[i].quote,
                     error: error.message
                 });
             }
@@ -1651,10 +1899,31 @@ class QuoteCanvas {
         // Update final stats
         this.updateGenerationStats();
         
-        // Show regenerate button if there were failures
-        if (this.failedImages.length > 0) {
-            this.regenerateFailedBtn.style.display = 'block';
+        // Show the regenerate button only while there is something left to retry
+        this.regenerateFailedBtn.style.display = this.failedImages.length > 0 ? 'block' : 'none';
+    }
+    
+    setGeneratedImage(imageData) {
+        const existing = this.generatedImages.find(item => item.index === imageData.index);
+        if (existing) {
+            if (existing.objectUrl) {
+                URL.revokeObjectURL(existing.objectUrl);
+            }
+            const pos = this.generatedImages.indexOf(existing);
+            this.generatedImages[pos] = imageData;
+        } else {
+            this.generatedImages.push(imageData);
         }
+        this.generatedImages.sort((a, b) => a.index - b.index);
+    }
+    
+    releaseGeneratedImages() {
+        for (const imageData of this.generatedImages) {
+            if (imageData.objectUrl) {
+                URL.revokeObjectURL(imageData.objectUrl);
+            }
+        }
+        this.generatedImages = [];
     }
     
     updateGenerationProgress(current, total, currentQuote) {
@@ -1683,6 +1952,7 @@ class QuoteCanvas {
     cancelGeneration() {
         this.isGenerating = false;
         this.isPaused = false;
+        this.wasCancelled = true;
         this.progressDetails.textContent = 'Generation cancelled';
         this.pauseGenerationBtn.textContent = 'Pause';
     }
@@ -1763,44 +2033,21 @@ class QuoteCanvas {
         this.updatePreview();
     }
     
-    duplicateSettings() {
-        const settings = this.exportCurrentSettings();
-        navigator.clipboard.writeText(JSON.stringify(settings, null, 2)).then(() => {
-            alert('Settings copied to clipboard!');
-        }).catch(() => {
-            // Fallback: show settings in a dialog
-            prompt('Copy these settings:', JSON.stringify(settings, null, 2));
-        });
-    }
-    
-    exportCurrentSettings() {
-        return {
-            dimensions: {
-                width: this.imageWidthInput.value,
-                height: this.imageHeightInput.value
-            },
-            typography: {
-                fontFamily: this.fontFamilySelect.value,
-                fontSize: this.fontSizeInput.value,
-                fontWeight: this.fontWeightSelect.value,
-                textColor: this.textColorInput.value,
-                textAlign: this.textAlignSelect.value,
-                lineHeight: this.lineHeightInput.value
-            },
-            effects: {
-                blur: this.bgBlur.value,
-                brightness: this.bgBrightness.value,
-                contrast: this.bgContrast.value,
-                saturation: this.bgSaturation.value,
-                filter: this.bgFilter.value,
-                vignette: this.vignetteStrength.value,
-                gradientOverlay: this.gradientOverlay.value
-            },
-            export: {
-                format: this.exportFormat.value,
-                quality: this.jpegQuality.value
-            }
-        };
+    async duplicateSettings() {
+        const json = JSON.stringify({
+            app: 'QuoteCanvas',
+            version: APP_VERSION,
+            design: this.collectDesign()
+        }, null, 2);
+
+        try {
+            await navigator.clipboard.writeText(json);
+            this.showToast('Design copied to clipboard');
+        } catch (error) {
+            // Clipboard is unavailable outside a secure context; fall back to a file.
+            this.exportDesign();
+            this.showToast('Clipboard unavailable — design file downloaded');
+        }
     }
     
     resetEffects() {
@@ -1818,7 +2065,10 @@ class QuoteCanvas {
         this.vignetteValue.textContent = '0%';
         this.gradientOverlay.value = 'none';
         
+        this.toggleGradientControls();
         this.updatePreview();
+        if (this.designPreset) this.designPreset.value = '';
+        this.scheduleDesignSave();
     }
     
     // UI control methods
@@ -1858,79 +2108,6 @@ class QuoteCanvas {
             this.imageHeightInput.value = height;
             this.updatePreview();
         }
-    }
-
-    async generateImagesSingleThreadedOptimized() {
-        const width = parseInt(this.imageWidthInput.value);
-        const height = parseInt(this.imageHeightInput.value);
-        const batchSize = 1; // Process one image at a time to minimize memory usage
-        
-        console.log(`Generating ${this.quotes.length} images with ${this.backgroundImageFiles.length} background files`);
-        console.log(`Memory optimization: Using LRU cache with ${this.maxCacheSize} images max`);
-        
-        for (let i = 0; i < this.quotes.length; i++) {
-            try {
-                // Create temporary canvas for generation
-                const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                
-                // Calculate which background to use for this specific image
-                let backgroundImg = null;
-                if (this.backgroundImageFiles.length > 0) {
-                    const backgroundIndex = i % this.backgroundImageFiles.length;
-                    
-                    try {
-                        // Load background image from cache or file
-                        backgroundImg = await this.loadImageFromCache(backgroundIndex);
-                        console.log(`Image ${i + 1}: Using background ${backgroundIndex + 1}/${this.backgroundImageFiles.length} (cache size: ${this.imageCache.size})`);
-                    } catch (error) {
-                        console.warn(`Failed to load background ${backgroundIndex} for image ${i + 1}:`, error);
-                        backgroundImg = null;
-                    }
-                }
-                
-                await this.drawQuoteImageMemoryEfficient(i, canvas, ctx, backgroundImg);
-                
-                // Convert to blob
-                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 0.9));
-                const imageData = {
-                    blob: blob,
-                    dataUrl: canvas.toDataURL('image/png', 0.9),
-                    filename: this.generateFilename(i, this.quotes[i]),
-                    quote: this.quotes[i]
-                };
-                
-                this.generatedImages.push(imageData);
-                
-                // Aggressive cleanup
-                canvas.width = 1;
-                canvas.height = 1;
-                ctx.clearRect(0, 0, 1, 1);
-                
-                // Update progress
-                const progress = ((i + 1) / this.quotes.length) * 100;
-                this.progressFill.style.width = progress + '%';
-                this.progressText.textContent = Math.round(progress) + '%';
-                
-                // Yield control more frequently and for longer
-                if (i % 5 === 0) { // Every 5 images
-                    await new Promise(resolve => setTimeout(resolve, 200));
-                    
-                    // Suggest garbage collection
-                    if (window.gc) {
-                        window.gc();
-                    }
-                }
-                
-            } catch (error) {
-                console.error(`Error generating image ${i + 1}:`, error);
-                // Continue with next image even if one fails
-            }
-        }
-        
-        console.log(`Generation complete. Final cache size: ${this.imageCache.size}`);
     }
 
     async generateCurrentImage() {
@@ -1983,8 +2160,12 @@ class QuoteCanvas {
             checkbox.addEventListener('change', () => this.updateSelectionButtons());
             
             const img = document.createElement('img');
-            img.src = imageData.dataUrl;
+            img.src = imageData.objectUrl;
             img.alt = `Quote ${imageData.index + 1}`;
+            img.loading = 'lazy';
+            img.decoding = 'async';
+            if (imageData.width) img.width = imageData.width;
+            if (imageData.height) img.height = imageData.height;
             img.addEventListener('click', () => this.previewImage(imageData));
             img.style.cursor = 'pointer';
             
@@ -2044,7 +2225,7 @@ class QuoteCanvas {
         overlay.className = 'fullscreen-overlay';
         
         const img = document.createElement('img');
-        img.src = imageData.dataUrl;
+        img.src = imageData.objectUrl;
         img.className = 'fullscreen-canvas';
         
         const closeBtn = document.createElement('button');
@@ -2079,17 +2260,22 @@ class QuoteCanvas {
     }
     
     showGenerationSummary() {
-        const total = this.generatedImages.length;
+        const total = this.generationStats.totalImages;
         const failed = this.failedImages.length;
-        const success = total;
+        const success = this.generatedImages.length;
         const elapsed = this.generationStats.startTime ? 
             ((Date.now() - this.generationStats.startTime) / 1000).toFixed(1) : 0;
         
-        let message = `✅ Generated ${success} images successfully`;
-        if (failed > 0) {
-            message += ` (${failed} failed)`;
+        let message;
+        if (this.wasCancelled) {
+            message = `⏹️ Cancelled — ${success} of ${total} generated`;
+        } else {
+            message = `✅ Generated ${success} images successfully`;
+            if (failed > 0) {
+                message += ` (${failed} failed)`;
+            }
+            message += ` in ${elapsed}s`;
         }
-        message += ` in ${elapsed}s`;
         
         this.progressDetails.textContent = message;
         
@@ -2136,8 +2322,9 @@ class QuoteCanvas {
             best: { level: 9 }
         };
         
-        images.forEach(imageData => {
-            zip.file(imageData.filename, imageData.blob);
+        const zipNames = dedupeZipNames(images);
+        images.forEach((imageData, i) => {
+            zip.file(zipNames[i], imageData.blob);
         });
         
         const zipBlob = await zip.generateAsync({ 
@@ -2167,16 +2354,25 @@ class QuoteCanvas {
     async regenerateFailed() {
         if (this.failedImages.length === 0) return;
         
-        const failedQuotes = this.failedImages.map(f => f.quote);
-        const failedIndices = this.failedImages.map(f => f.index);
+        const items = this.failedImages.map(({ index, quote }) => ({ index, quote }));
         
         this.failedImages = []; // Reset failed list
+        this.wasCancelled = false;
+        this.isGenerating = true;
+        this.showGenerationUI(true);
+        this.generationStats.startTime = Date.now();
+        this.generationStats.imagesGenerated = 0;
         
         try {
-            await this.generateImagesBatch(failedQuotes, Math.min(...failedIndices));
+            await this.ensureFontLoaded();
+            await this.generateImagesBatch(items);
             this.displayResults();
         } catch (error) {
             console.error('Failed to regenerate images:', error);
+        } finally {
+            this.isGenerating = false;
+            this.generateAllBtn.disabled = false;
+            this.generateCurrentBtn.disabled = false;
         }
     }
 
@@ -2312,6 +2508,7 @@ class QuoteCanvas {
         }
         
         this.updatePreview();
+        this.scheduleDesignSave();
     }
 
     applyTextShadow(ctx) {
@@ -2382,18 +2579,32 @@ class QuoteCanvas {
     }
 }
 
-// Initialize the application when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    // Update version display
-    const versionElement = document.getElementById('app-version');
-    const footerVersionElement = document.getElementById('footer-version');
-    
-    if (versionElement) {
-        versionElement.textContent = APP_VERSION;
-    }
-    if (footerVersionElement) {
-        footerVersionElement.textContent = APP_VERSION;
-    }
-    
-    new QuoteCanvas();
-});
+// Initialize the application when DOM is loaded. Guarded so this file can be
+// required from Node (no top-level DOM access may throw at module load).
+if (typeof document !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', () => {
+        // Update version display
+        const versionElement = document.getElementById('app-version');
+        const footerVersionElement = document.getElementById('footer-version');
+        
+        if (versionElement) {
+            versionElement.textContent = APP_VERSION;
+        }
+        if (footerVersionElement) {
+            footerVersionElement.textContent = APP_VERSION;
+        }
+        
+        new QuoteCanvas();
+    });
+}
+
+// CommonJS export so the pure helpers can be tested with node:test.
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        sanitizeForFilename,
+        formatToExtension,
+        stripImageExtension,
+        buildFilename,
+        dedupeZipNames
+    };
+}

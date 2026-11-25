@@ -25,14 +25,14 @@ Transform your quotes into stunning, professional images with QuoteCanvas - a co
 ### 🚀 Enhanced Export & Generation
 - **Multiple Export Formats**: PNG, JPEG, WebP with quality controls
 - **ZIP Compression**: Configurable compression levels (1-9) for batch downloads
-- **Live Preview System**: Zoom controls (25%-200%), fullscreen mode, and navigation
+- **Live Preview System**: Sticky preview while editing, fullscreen mode, comparison view, and navigation
 - **Pause/Resume Generation**: Full control over batch processing with progress tracking
 
 ### 🌟 Modern User Experience
 - **Dark Mode Theme**: Professional dark theme with smooth transitions and eye-friendly colors
-- **Touch-Friendly Interface**: Optimized controls for mobile and tablet devices (enabled by default)
+- **Touch-Friendly Interface**: Optimized controls for mobile and tablet devices (auto-detected, toggleable)
 - **Responsive Design**: Seamless experience across desktop, tablet, and mobile devices
-- **Settings Persistence**: Automatic saving of preferences with export/import functionality
+- **Settings Persistence**: The full design (typography, effects, colors, naming) is auto-saved, with JSON export/import and presets
 - **Performance Monitoring**: Real-time memory usage tracking and generation statistics
 
 ### ⚡ Performance & Technical Features
@@ -204,7 +204,7 @@ Or with objects:
 - **Effect Compositing**: Layered effect system for complex visual combinations
 
 ### 💾 Data Management & Persistence
-- **Settings Persistence**: localStorage integration with export/import functionality
+- **Settings Persistence**: localStorage integration with full-design JSON export/import
 - **Theme System**: Dynamic theme switching with CSS custom properties
 - **Touch Detection**: Adaptive UI with touch-friendly controls
 - **Performance Monitoring**: Real-time memory usage and generation speed tracking
@@ -339,10 +339,10 @@ Export settings for future projects
 ## 🔧 Advanced Configuration & Troubleshooting
 
 ### ⚙️ Settings & Customization
-- **Settings Persistence**: All preferences auto-saved to localStorage with export/import
-- **Touch Mode**: Toggle touch-friendly interface (enabled by default)
+- **Settings Persistence**: The theme, toggle preferences and every design control are auto-saved to localStorage, with JSON export/import and three built-in presets
+- **Touch Mode**: Auto-detects coarse pointers on first run; toggleable and persisted
 - **Dark Mode**: Professional dark theme with system preference detection
-- **Preview Quality**: Adjustable rendering quality (Low/Medium/High) for performance tuning
+- **Design Presets**: Classic, Editorial and Minimal starting points, editable afterwards
 - **Performance Monitoring**: Real-time memory and speed tracking with detailed metrics
 
 ### 🐛 Common Issues & Solutions
