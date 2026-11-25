@@ -1,6 +1,133 @@
 // App version - updated automatically by GitHub Actions
 const APP_VERSION = 'dev';
 
+// ---- Pure filename helpers (module scope; used by the app and by node:test) ----
+
+function formatDate(date, format) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    switch (format) {
+        case 'MM-DD-YYYY':
+            return `${month}-${day}-${year}`;
+        case 'DD-MM-YYYY':
+            return `${day}-${month}-${year}`;
+        case 'YYYYMMDD':
+            return `${year}${month}${day}`;
+        case 'YYYY-MM-DD':
+        default:
+            return `${year}-${month}-${day}`;
+    }
+}
+
+function formatTime(date, format) {
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+
+    switch (format) {
+        case 'HH-MM':
+            return `${hours}-${minutes}`;
+        case 'HHMMSS':
+            return `${hours}${minutes}${seconds}`;
+        case 'HHMM':
+            return `${hours}${minutes}`;
+        case 'HH-MM-SS':
+        default:
+            return `${hours}-${minutes}-${seconds}`;
+    }
+}
+
+// NFKD-decompose and strip combining marks so accented chars become ASCII
+// (é -> e), then drop invalid filesystem characters, collapse whitespace and
+// underscore runs to '-', keep only [A-Za-z0-9._-], collapse repeated '-', and
+// trim leading/trailing '-' and '.' so no dotfiles or stray hyphens remain.
+function sanitizeForFilename(text) {
+    return String(text)
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '') // strip combining marks
+        .replace(/[<>:"/\\|?*\x00-\x1f]/g, '') // remove invalid chars
+        .replace(/[\s_]+/g, '-') // whitespace/underscore runs -> hyphen
+        .replace(/[^\w\-_.]/g, '') // keep only alphanumeric, hyphens, underscores, dots
+        .replace(/-+/g, '-') // collapse repeated hyphens
+        .replace(/^-+|-+$/g, '') // trim leading/trailing hyphens
+        .replace(/^\.+|\.+$/g, ''); // trim leading/trailing dots
+}
+
+function formatToExtension(mimeOrFormat) {
+    const value = String(mimeOrFormat).toLowerCase();
+    if (value === 'image/jpeg' || value === 'jpeg') return 'jpg';
+    if (value === 'image/webp' || value === 'webp') return 'webp';
+    return 'png';
+}
+
+// Remove one trailing image extension (case-insensitive). A dot in the middle
+// of a name (e.g. my.quote) is preserved.
+function stripImageExtension(name) {
+    return String(name).replace(/\.(png|jpe?g|webp|gif|bmp|svg)$/i, '');
+}
+
+// Build the base filename from the naming pattern (no extension logic here).
+function buildFilename(options) {
+    const pattern = options.pattern || 'quote-{index}';
+    const indexStart = options.indexStart || 1;
+    const indexPadding = options.indexPadding || 0;
+    const quoteMaxLength = options.quoteMaxLength || 30;
+    const dateFormat = options.dateFormat;
+    const timeFormat = options.timeFormat;
+    const now = options.now || new Date();
+    const index = options.index;
+    const quote = options.quote;
+
+    const actualIndex = index + indexStart;
+    const paddedIndex = indexPadding > 0 ?
+        actualIndex.toString().padStart(indexPadding, '0') :
+        actualIndex.toString();
+
+    const cleanQuote = sanitizeForFilename(quote)
+        .substring(0, quoteMaxLength)
+        .trim();
+
+    const formattedDate = formatDate(now, dateFormat);
+    const formattedTime = formatTime(now, timeFormat);
+    const timestamp = Math.floor(now.getTime() / 1000);
+
+    let filename = pattern
+        .replace(/\{index\}/g, paddedIndex)
+        .replace(/\{quote\}/g, cleanQuote)
+        .replace(/\{date\}/g, formattedDate)
+        .replace(/\{time\}/g, formattedTime)
+        .replace(/\{timestamp\}/g, timestamp.toString());
+
+    return sanitizeForFilename(filename);
+}
+
+// Return distinct names for a list of { filename } (or { name }) items. A
+// repeated base name gets -2, -3, ... inserted before the extension, comparing
+// case-insensitively, first-come-first-served.
+function dedupeZipNames(items) {
+    const used = new Set();
+    const result = [];
+    for (const item of items) {
+        const name = String(item.filename != null ? item.filename : item.name);
+        const extMatch = name.match(/\.([^.\s]+)$/);
+        const base = extMatch ? name.slice(0, name.length - extMatch[0].length) : name;
+        const ext = extMatch ? extMatch[0] : '';
+        let candidate = name;
+        let n = 1;
+        // Check the RESULT set, not just how often the original name appeared:
+        // a suffix can itself collide with a name that is already taken.
+        while (used.has(candidate.toLowerCase())) {
+            n += 1;
+            candidate = `${base}-${n}${ext}`;
+        }
+        used.add(candidate.toLowerCase());
+        result.push(candidate);
+    }
+    return result;
+}
+
 class QuoteCanvas {
     constructor() {
         this.quotes = [];
@@ -436,93 +563,31 @@ class QuoteCanvas {
     }
 
     generateFilename(index, quote) {
-        const pattern = this.namingPatternInput.value || 'quote-{index}';
         const indexStart = parseInt(this.indexStartInput.value) || 1;
         const indexPadding = parseInt(this.indexPaddingInput.value) || 0;
-        const quoteMaxLength = parseInt(this.quoteMaxLengthInput.value) || 30;
-        const dateFormat = this.dateFormatSelect.value;
-        const timeFormat = this.timeFormatSelect.value;
-
-        const now = new Date();
         const actualIndex = index + indexStart;
-        
-        // Pad index with zeros if requested
-        const paddedIndex = indexPadding > 0 ? 
-            actualIndex.toString().padStart(indexPadding, '0') : 
+        const paddedIndex = indexPadding > 0 ?
+            actualIndex.toString().padStart(indexPadding, '0') :
             actualIndex.toString();
 
-        // Clean quote text for filename
-        const cleanQuote = this.sanitizeForFilename(quote)
-            .substring(0, quoteMaxLength)
-            .trim();
+        const base = buildFilename({
+            pattern: this.namingPatternInput.value || 'quote-{index}',
+            indexStart,
+            indexPadding,
+            quoteMaxLength: parseInt(this.quoteMaxLengthInput.value) || 30,
+            dateFormat: this.dateFormatSelect.value,
+            timeFormat: this.timeFormatSelect.value,
+            index,
+            quote
+        });
 
-        // Format date
-        const formattedDate = this.formatDate(now, dateFormat);
-        
-        // Format time
-        const formattedTime = this.formatTime(now, timeFormat);
-        
-        // Unix timestamp
-        const timestamp = Math.floor(now.getTime() / 1000);
+        // A pattern may already carry an image extension; strip it so we never
+        // produce a doubled extension. Then fall back to a deterministic name
+        // when the sanitised base is empty (e.g. a CJK/emoji-only quote).
+        const stripped = stripImageExtension(base);
+        const safeBase = stripped.length > 0 ? stripped : `quote-${paddedIndex}`;
 
-        // Replace variables in pattern
-        let filename = pattern
-            .replace(/\{index\}/g, paddedIndex)
-            .replace(/\{quote\}/g, cleanQuote)
-            .replace(/\{date\}/g, formattedDate)
-            .replace(/\{time\}/g, formattedTime)
-            .replace(/\{timestamp\}/g, timestamp.toString());
-
-        // Clean filename
-        filename = this.sanitizeForFilename(filename);
-        
-        return filename + '.png';
-    }
-
-    sanitizeForFilename(text) {
-        // Remove or replace characters that are invalid in filenames
-        return text
-            .replace(/[<>:"/\\|?*\x00-\x1f]/g, '') // Remove invalid chars
-            .replace(/\s+/g, '-') // Replace spaces with hyphens
-            .replace(/[^\w\-_.]/g, '') // Keep only alphanumeric, hyphens, underscores, and dots
-            .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
-            .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
-    }
-
-    formatDate(date, format) {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-
-        switch (format) {
-            case 'MM-DD-YYYY':
-                return `${month}-${day}-${year}`;
-            case 'DD-MM-YYYY':
-                return `${day}-${month}-${year}`;
-            case 'YYYYMMDD':
-                return `${year}${month}${day}`;
-            case 'YYYY-MM-DD':
-            default:
-                return `${year}-${month}-${day}`;
-        }
-    }
-
-    formatTime(date, format) {
-        const hours = String(date.getHours()).padStart(2, '0');
-        const minutes = String(date.getMinutes()).padStart(2, '0');
-        const seconds = String(date.getSeconds()).padStart(2, '0');
-
-        switch (format) {
-            case 'HH-MM':
-                return `${hours}-${minutes}`;
-            case 'HHMMSS':
-                return `${hours}${minutes}${seconds}`;
-            case 'HHMM':
-                return `${hours}${minutes}`;
-            case 'HH-MM-SS':
-            default:
-                return `${hours}-${minutes}-${seconds}`;
-        }
+        return safeBase + '.' + formatToExtension(this.getImageFormat());
     }
 
     // Enhanced accordion functionality
@@ -2257,8 +2322,9 @@ class QuoteCanvas {
             best: { level: 9 }
         };
         
-        images.forEach(imageData => {
-            zip.file(imageData.filename, imageData.blob);
+        const zipNames = dedupeZipNames(images);
+        images.forEach((imageData, i) => {
+            zip.file(zipNames[i], imageData.blob);
         });
         
         const zipBlob = await zip.generateAsync({ 
@@ -2513,18 +2579,32 @@ class QuoteCanvas {
     }
 }
 
-// Initialize the application when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    // Update version display
-    const versionElement = document.getElementById('app-version');
-    const footerVersionElement = document.getElementById('footer-version');
-    
-    if (versionElement) {
-        versionElement.textContent = APP_VERSION;
-    }
-    if (footerVersionElement) {
-        footerVersionElement.textContent = APP_VERSION;
-    }
-    
-    new QuoteCanvas();
-});
+// Initialize the application when DOM is loaded. Guarded so this file can be
+// required from Node (no top-level DOM access may throw at module load).
+if (typeof document !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', () => {
+        // Update version display
+        const versionElement = document.getElementById('app-version');
+        const footerVersionElement = document.getElementById('footer-version');
+        
+        if (versionElement) {
+            versionElement.textContent = APP_VERSION;
+        }
+        if (footerVersionElement) {
+            footerVersionElement.textContent = APP_VERSION;
+        }
+        
+        new QuoteCanvas();
+    });
+}
+
+// CommonJS export so the pure helpers can be tested with node:test.
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        sanitizeForFilename,
+        formatToExtension,
+        stripImageExtension,
+        buildFilename,
+        dedupeZipNames
+    };
+}
