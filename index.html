@@ -7,7 +7,6 @@
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <meta name="theme-color" content="#667eea">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, maximum-scale=5.0">
 </head>
 <body>
     <div class="container">
@@ -17,9 +16,9 @@
                 <p>Transform your quotes into beautiful, shareable images</p>
             </div>
             <div class="header-controls">
-                <button id="theme-toggle" class="theme-toggle" title="Toggle Dark Mode">🌙</button>
-                <button id="settings-toggle" class="settings-toggle" title="Settings">⚙️</button>
-                <button id="performance-toggle" class="performance-toggle" title="Performance Monitor">📊</button>
+                <button id="theme-toggle" class="theme-toggle" title="Toggle Dark Mode" aria-label="Toggle dark mode" aria-pressed="true">🌙</button>
+                <button id="settings-toggle" class="settings-toggle" title="Settings" aria-label="Open settings" aria-expanded="false">⚙️</button>
+                <button id="performance-toggle" class="performance-toggle" title="Performance Monitor" aria-label="Open performance monitor" aria-expanded="false">📊</button>
             </div>
         </header>
 
@@ -32,20 +31,24 @@
                     <input type="checkbox" id="auto-save-settings" checked>
                 </div>
                 <div class="setting-group">
-                    <label for="preview-quality">Preview Quality</label>
-                    <select id="preview-quality">
-                        <option value="low">Low (Fast)</option>
-                        <option value="medium" selected>Medium</option>
-                        <option value="high">High (Slow)</option>
-                    </select>
-                </div>
-                <div class="setting-group">
                     <label for="touch-mode">Touch-Friendly Mode</label>
                     <input type="checkbox" id="touch-mode">
+                </div>
+                <div class="setting-group">
+                    <label for="design-preset">Design Preset</label>
+                    <select id="design-preset">
+                        <option value="">Custom</option>
+                        <option value="classic">Classic</option>
+                        <option value="editorial">Editorial</option>
+                        <option value="minimal">Minimal Light</option>
+                    </select>
                 </div>
             </div>
             <div class="settings-actions">
                 <button id="save-settings-btn" class="primary-btn">Save Settings</button>
+                <button id="export-settings-btn" class="secondary-btn">Export Design</button>
+                <button id="import-settings-btn" class="secondary-btn">Import Design</button>
+                <input type="file" id="import-settings-file" accept="application/json,.json" hidden>
                 <button id="reset-settings-btn" class="secondary-btn">Reset to Defaults</button>
             </div>
             <div class="version-info">
@@ -77,36 +80,30 @@
         </div>
 
         <main>
-            <!-- Progress Indicator -->
-            <div class="progress-indicator">
-                <div class="step-progress">
-                    <div class="progress-line"></div>
-                    <div class="step-item active" data-step="1">
-                        <div class="step-number">1</div>
-                        <div class="step-label">Content</div>
-                    </div>
-                    <div class="step-item" data-step="2">
-                        <div class="step-number">2</div>
-                        <div class="step-label">Design</div>
-                    </div>
-                    <div class="step-item" data-step="3">
-                        <div class="step-number">3</div>
-                        <div class="step-label">Effects</div>
-                    </div>
-                    <div class="step-item" data-step="4">
-                        <div class="step-number">4</div>
-                        <div class="step-label">Generate</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Navigation Tabs -->
-            <nav class="tab-navigation">
-                <button class="tab-btn active" data-tab="content-tab">📄 1. Content</button>
-                <button class="tab-btn" data-tab="design-tab">🎨 2. Design</button>
-                <button class="tab-btn" data-tab="effects-tab">✨ 3. Effects</button>
-                <button class="tab-btn" data-tab="export-tab">🎯 4. Generate & Export</button>
+            <!-- Workflow navigation (also the progress indicator) -->
+            <nav class="progress-indicator step-progress" aria-label="Workflow steps">
+                <div class="progress-line"></div>
+                <button type="button" class="step-item active" data-tab="content-tab" aria-current="step">
+                    <span class="step-number">1</span>
+                    <span class="step-label">Content</span>
+                </button>
+                <button type="button" class="step-item" data-tab="design-tab">
+                    <span class="step-number">2</span>
+                    <span class="step-label">Design</span>
+                </button>
+                <button type="button" class="step-item" data-tab="effects-tab">
+                    <span class="step-number">3</span>
+                    <span class="step-label">Effects</span>
+                </button>
+                <button type="button" class="step-item" data-tab="export-tab">
+                    <span class="step-number">4</span>
+                    <span class="step-label">Generate</span>
+                </button>
             </nav>
+
+            <!-- Workspace: design controls + sticky preview while editing -->
+            <div class="workspace" id="workspace">
+            <div class="workspace-content">
 
             <!-- Content Tab -->
             <div class="tab-content active" id="content-tab">
@@ -459,11 +456,11 @@
                             <button id="next-quote" class="nav-btn" disabled>Next →</button>
                         </div>
                         <div class="preview-view-controls">
-                            <button id="zoom-out" class="zoom-btn">🔍-</button>
+                            <button id="zoom-out" class="zoom-btn" aria-label="Zoom out">🔍-</button>
                             <span id="zoom-level">100%</span>
-                            <button id="zoom-in" class="zoom-btn">🔍+</button>
-                            <button id="fullscreen-preview" class="view-btn">⛶</button>
-                            <button id="comparison-mode" class="view-btn">👁️‍🗨️</button>
+                            <button id="zoom-in" class="zoom-btn" aria-label="Zoom in">🔍+</button>
+                            <button id="fullscreen-preview" class="view-btn" aria-label="Open fullscreen preview">⛶</button>
+                            <button id="comparison-mode" class="view-btn" aria-label="Toggle comparison view" aria-pressed="false">👁️‍🗨️</button>
                         </div>
                     </div>
                     <div class="preview-container" id="preview-container">
@@ -489,12 +486,24 @@
                     </div>
                 </section>
             </div>
+
+            </div><!-- /.workspace-content -->
+
+            <aside class="workspace-aside" id="workspace-aside" hidden>
+                <button type="button" class="preview-dock" id="preview-dock" aria-label="Open the full preview on the Generate tab">
+                    <canvas id="dock-canvas" aria-hidden="true"></canvas>
+                    <span class="preview-dock-label">Live preview</span>
+                </button>
+            </aside>
+            </div><!-- /.workspace -->
         </main>
         
         <footer class="app-footer">
             <small>QuoteCanvas v<span id="footer-version">dev</span></small>
         </footer>
     </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="script.js"></script>

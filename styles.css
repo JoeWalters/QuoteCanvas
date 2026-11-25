@@ -4,6 +4,10 @@
     box-sizing: border-box;
 }
 
+:root {
+    --border-color: #e0e0e0;
+}
+
 body {
     font-family: 'Inter', sans-serif;
     line-height: 1.6;
@@ -15,6 +19,7 @@ body {
 
 /* Dark Theme */
 body.dark-theme {
+    --border-color: #4a5568;
     color: #e0e0e0;
     background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
 }
@@ -90,17 +95,6 @@ body.dark-theme .text-input textarea {
 
 body.dark-theme .text-input textarea:focus {
     border-color: #3498db;
-}
-
-body.dark-theme .tab-btn {
-    background: #34495e;
-    color: #e0e0e0;
-    border-color: #4a5568;
-}
-
-body.dark-theme .tab-btn.active {
-    background: #3498db;
-    color: white;
 }
 
 .container {
@@ -196,6 +190,7 @@ header p {
     display: flex;
     gap: 10px;
     justify-content: center;
+    flex-wrap: wrap;
 }
 
 .version-info {
@@ -245,11 +240,6 @@ section {
     padding: 30px;
     margin-bottom: 30px;
     box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-    transition: transform 0.2s ease;
-}
-
-section:hover {
-    transform: translateY(-2px);
 }
 
 section h2 {
@@ -654,6 +644,22 @@ section h2 {
     align-items: center;
     position: relative;
     z-index: 2;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    border-radius: 8px;
+}
+
+.step-item:focus-visible {
+    outline: 3px solid #3498db;
+    outline-offset: 4px;
+}
+
+.step-item:hover .step-number {
+    background: #cfd8e3;
 }
 
 .step-number {
@@ -692,53 +698,19 @@ section h2 {
 .step-item.completed .step-number {
     background: #28a745;
     color: white;
+    font-size: 0;
 }
 
 .step-item.completed .step-number::before {
     content: '✓';
-    font-size: 16px;
+    font-size: 18px;
 }
 
 .step-item.completed .step-label {
     color: #28a745;
 }
 
-/* Tab Navigation */
-.tab-navigation {
-    display: flex;
-    background: white;
-    border-radius: 12px;
-    padding: 5px;
-    margin-bottom: 20px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    overflow-x: auto;
-    gap: 5px;
-}
-
-.tab-btn {
-    flex: 1;
-    min-width: 120px;
-    padding: 12px 20px;
-    border: none;
-    background: transparent;
-    color: #444;
-    cursor: pointer;
-    border-radius: 8px;
-    font-weight: 500;
-    transition: all 0.3s ease;
-    white-space: nowrap;
-}
-
-.tab-btn:hover {
-    background: #f8f9fa;
-    color: #222;
-}
-
-.tab-btn.active {
-    background: #3498db;
-    color: white;
-}
-
+/* Tab content panels (navigation lives in the workflow steps above) */
 .tab-content {
     display: none;
 }
@@ -747,17 +719,110 @@ section h2 {
     display: block;
 }
 
+/* Workspace: content + sticky preview while editing */
+.workspace {
+    display: block;
+}
+
+.workspace.has-dock {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 240px;
+    gap: 24px;
+    align-items: start;
+}
+
+.workspace-aside {
+    position: sticky;
+    top: 12px;
+    align-self: start;
+}
+
+.workspace-aside[hidden] {
+    display: none;
+}
+
+.preview-dock {
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    max-width: 240px;
+    margin: 0;
+    padding: 8px;
+    background: #1f2d3a;
+    border: 1px solid #3498db;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.28);
+    cursor: pointer;
+}
+
+.preview-dock[hidden] {
+    display: none;
+}
+
+.preview-dock canvas {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 70vh;
+    border-radius: 6px;
+}
+
+.preview-dock-label {
+    font-size: 12px;
+    color: #e0e0e0;
+}
+
+.preview-dock:hover {
+    border-color: #74b9ff;
+}
+
+.preview-dock:focus-visible {
+    outline: 3px solid #74b9ff;
+    outline-offset: 3px;
+}
+
+/* Transient status message */
+.toast {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    z-index: 1100;
+    max-width: min(420px, calc(100vw - 32px));
+    padding: 12px 18px;
+    border-radius: 8px;
+    background: #1f2d3a;
+    color: #fff;
+    font-size: 14px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, 16px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.toast.visible {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
+.toast.error {
+    background: #8e2b25;
+}
+
 /* Touch-Friendly Mode */
-body.touch-mode .tab-btn {
-    min-height: 60px;
+body.touch-mode .control-group input,
+body.touch-mode .control-group select {
+    min-height: 50px;
+    padding: 15px;
     font-size: 16px;
 }
 
-body.touch-mode .control-group input,
-body.touch-mode .control-group select,
-body.touch-mode button {
+body.touch-mode button:not(.step-item):not(.preview-dock) {
     min-height: 50px;
-    padding: 15px;
     font-size: 16px;
 }
 
@@ -987,10 +1052,6 @@ body.dark-theme .step-label {
 
 body.dark-theme .step-item.active .step-label {
     color: #74b9ff;
-}
-
-body.dark-theme .tab-navigation {
-    background: #2c3e50;
 }
 
 body.dark-theme .preview-container {
@@ -1235,16 +1296,6 @@ body.dark-theme .quote-preview {
         max-width: 300px;
     }
     
-    .tab-navigation {
-        overflow-x: auto;
-        padding: 5px;
-    }
-    
-    .tab-btn {
-        min-width: 100px;
-        font-size: 14px;
-    }
-    
     .preview-toolbar {
         flex-direction: column;
         gap: 15px;
@@ -1254,6 +1305,23 @@ body.dark-theme .quote-preview {
         flex-direction: column;
     }
     
+    .preview-dock {
+        margin: 0 auto;
+    }
+
+    .workspace.has-dock {
+        display: block;
+    }
+
+    .workspace-aside {
+        position: static;
+        margin-bottom: 16px;
+    }
+
+    .preview-dock canvas {
+        max-height: 40vh;
+    }
+
     .quick-buttons {
         flex-direction: column;
         align-items: center;
@@ -1304,4 +1372,15 @@ body.dark-theme .quote-preview {
 
 ::-webkit-scrollbar-thumb:hover {
     background: #2980b9;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
 }
