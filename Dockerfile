@@ -19,6 +19,7 @@ COPY LICENSE .
 
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
+COPY security-headers.conf /etc/nginx/security-headers.conf
 
 # Set proper permissions for static files
 RUN chmod -R 644 /usr/share/nginx/html/* && \
