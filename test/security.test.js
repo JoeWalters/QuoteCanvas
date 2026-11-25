@@ -141,3 +141,24 @@ test('every Dockerfile that installs nginx.conf also installs the snippet it inc
         );
     }
 });
+
+test('preview zoom state stays a number and the element stays separate', () => {
+    // Card #56: this.zoomLevel was overwritten with #zoom-level, so
+    // `this.zoomLevel + delta` produced NaN and `this.zoomLevel.textContent`
+    // threw. Neither line may come back.
+    assert.ok(
+        !/this\.zoomLevel\s*=\s*document\.getElementById/.test(script),
+        'this.zoomLevel must never be assigned a DOM element'
+    );
+    assert.ok(
+        !/this\.zoomLevel\.textContent/.test(script),
+        'this.zoomLevel is a number; write the label to this.zoomLevelEl'
+    );
+    assert.ok(/this\.zoomLevelEl\s*=\s*document\.getElementById\('zoom-level'\)/.test(script),
+        'this.zoomLevelEl must hold the #zoom-level element');
+    for (const name of ['ZOOM_MIN', 'ZOOM_MAX', 'ZOOM_DEFAULT']) {
+        assert.ok(new RegExp(`const ${name}\\s*=`).test(script), `${name} must be declared`);
+    }
+    assert.ok(/Math\.max\(ZOOM_MIN,\s*Math\.min\(ZOOM_MAX/.test(script),
+        'adjustZoom must clamp with ZOOM_MIN/ZOOM_MAX');
+});
