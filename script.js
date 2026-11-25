@@ -137,7 +137,7 @@ function dedupeZipNames(items) {
 class QuoteCanvas {
     constructor() {
         this.quotes = [];
-        this.backgroundImages = [];
+        this.currentBackgroundImage = null;
         this.backgroundImageFiles = [];
         this.currentQuoteIndex = 0;
         this.currentBackgroundIndex = 0;
@@ -1255,7 +1255,7 @@ class QuoteCanvas {
         
         // Store file references instead of loading all images into memory
         this.backgroundImageFiles = [];
-        this.backgroundImages = []; // Keep for compatibility but will be populated on-demand
+        this.currentBackgroundImage = null; // Reset preview state before loading new files
         this.backgroundPreview.innerHTML = '';
         this.imageCache.clear(); // Clear existing cache
         
@@ -1284,8 +1284,7 @@ class QuoteCanvas {
             
             // Load the first image for preview
             try {
-                const firstImg = await this.loadImageFromFile(this.backgroundImageFiles[0]);
-                this.backgroundImages = [firstImg]; // Store only one for preview
+                this.currentBackgroundImage = await this.backgroundFor();
                 this.updatePreview();
             } catch (error) {
                 console.error('Error loading first background for preview:', error);
@@ -1330,8 +1329,7 @@ class QuoteCanvas {
             
             // Load the full image for preview
             try {
-                const fullImg = await this.loadImageFromCache(index);
-                this.backgroundImages = [fullImg]; // Replace array with just current image
+                this.currentBackgroundImage = await this.backgroundFor();
                 this.updatePreview();
             } catch (error) {
                 console.error('Error loading background for preview:', error);
@@ -1342,12 +1340,15 @@ class QuoteCanvas {
         removeBtn.className = 'remove-background-btn';
         removeBtn.innerHTML = '×';
         removeBtn.title = 'Remove background';
-        removeBtn.addEventListener('click', (e) => {
+        removeBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            this.removeBackground(index);
+            await this.removeBackground(index);
         });
         
-        if (index === 0) {
+        // The creation-time default is "the selected one", not "the first one":
+        // hard-coding index 0 here leaves two thumbnails selected after a removal
+        // moves the selection off 0.
+        if (index === this.currentBackgroundIndex) {
             thumbnail.classList.add('selected');
         }
         
@@ -1361,6 +1362,7 @@ class QuoteCanvas {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             const img = new Image();
+            const objectUrl = URL.createObjectURL(file);
             
             img.onload = () => {
                 // Calculate thumbnail dimensions
@@ -1388,10 +1390,14 @@ class QuoteCanvas {
                 // Clean up
                 canvas.width = 1;
                 canvas.height = 1;
+                URL.revokeObjectURL(objectUrl);
             };
             
-            img.onerror = reject;
-            img.src = URL.createObjectURL(file);
+            img.onerror = (err) => {
+                URL.revokeObjectURL(objectUrl);
+                reject(err);
+            };
+            img.src = objectUrl;
         });
     }
 
@@ -1445,6 +1451,23 @@ class QuoteCanvas {
         
         this.imageCache.set(index, img);
         return img;
+    }
+
+    // Which background an output uses. `outputIndex` undefined means "the one the
+    // user has selected" (preview, Generate Current); an explicit index cycles
+    // through every uploaded background (Generate All), as it always has.
+    backgroundIndexFor(outputIndex) {
+        const count = this.backgroundImageFiles.length;
+        if (count === 0) return null;
+        if (outputIndex === undefined || outputIndex === null) {
+            return Math.min(Math.max(this.currentBackgroundIndex, 0), count - 1);
+        }
+        return outputIndex % count;
+    }
+
+    async backgroundFor(outputIndex) {
+        const index = this.backgroundIndexFor(outputIndex);
+        return index === null ? null : this.loadImageFromCache(index);
     }
 
     updateQuoteDisplay() {
@@ -1529,8 +1552,8 @@ class QuoteCanvas {
     
     drawBackgroundWithEffects(ctx, width, height, skipEffects = false) {
         // Draw background image or solid color
-        if (this.backgroundImages.length > 0 && this.currentBackgroundIndex < this.backgroundImages.length) {
-            const bgImg = this.backgroundImages[this.currentBackgroundIndex];
+        if (this.currentBackgroundImage) {
+            const bgImg = this.currentBackgroundImage;
             
             if (!skipEffects) {
                 // Apply filters
@@ -1873,11 +1896,10 @@ class QuoteCanvas {
                 // Calculate which background to use
                 let backgroundImg = null;
                 if (this.backgroundImageFiles.length > 0) {
-                    const backgroundIndex = actualIndex % this.backgroundImageFiles.length;
                     try {
-                        backgroundImg = await this.loadImageFromCache(backgroundIndex);
+                        backgroundImg = await this.backgroundFor(actualIndex);
                     } catch (error) {
-                        console.warn(`Failed to load background ${backgroundIndex}:`, error);
+                        console.warn('Failed to load background:', error);
                     }
                 }
                 
@@ -2149,7 +2171,7 @@ class QuoteCanvas {
         let backgroundImg = null;
         if (this.backgroundImageFiles.length > 0) {
             try {
-                backgroundImg = await this.loadImageFromCache(this.currentBackgroundIndex);
+                backgroundImg = await this.backgroundFor();
             } catch (error) {
                 console.warn('Failed to load background for current image:', error);
             }
@@ -2454,7 +2476,7 @@ class QuoteCanvas {
         this.backgroundFilesLabel.classList.remove('file-uploaded');
     }
 
-    removeBackground(index) {
+    async removeBackground(index) {
         // Remove from file array and cache
         this.backgroundImageFiles.splice(index, 1);
         this.imageCache.delete(index);
@@ -2476,7 +2498,10 @@ class QuoteCanvas {
         }
         
         // Refresh the thumbnail display
-        this.refreshBackgroundThumbnails();
+        await this.refreshBackgroundThumbnails();
+        
+        // Reload the selected image so the preview matches the selection
+        this.currentBackgroundImage = await this.backgroundFor();
         
         // Update preview
         this.updatePreview();
@@ -2485,12 +2510,12 @@ class QuoteCanvas {
         if (this.backgroundImageFiles.length === 0) {
             this.backgroundControls.style.display = 'none';
             this.resetBackgroundFileStatus();
-            this.backgroundImages = [];
+            this.currentBackgroundImage = null;
         }
     }
 
     clearAllBackgrounds() {
-        this.backgroundImages = [];
+        this.currentBackgroundImage = null;
         this.backgroundImageFiles = [];
         this.imageCache.clear();
         this.currentBackgroundIndex = 0;
@@ -2513,10 +2538,14 @@ class QuoteCanvas {
         // Set the current background as selected
         if (this.backgroundImageFiles.length > 0) {
             const thumbnails = document.querySelectorAll('.background-thumbnail');
+            thumbnails.forEach(t => t.classList.remove('selected'));
             if (thumbnails[this.currentBackgroundIndex]) {
                 thumbnails[this.currentBackgroundIndex].classList.add('selected');
             }
         }
+        
+        // Restore the preview image so the selection and canvas cannot disagree
+        this.currentBackgroundImage = await this.backgroundFor();
     }
 
     toggleFontStyle(style) {

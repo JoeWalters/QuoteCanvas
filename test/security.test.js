@@ -162,3 +162,27 @@ test('preview zoom state stays a number and the element stays separate', () => {
     assert.ok(/Math\.max\(ZOOM_MIN,\s*Math\.min\(ZOOM_MAX/.test(script),
         'adjustZoom must clamp with ZOOM_MIN/ZOOM_MAX');
 });
+
+test('background selection uses one shared selector and a single decoded image', () => {
+    // Card #57: the preview held a one-element backgroundImages array and drew
+    // solid colour whenever currentBackgroundIndex >= 1. All three paths
+    // (preview, Generate Current, Generate All) must route through the shared
+    // backgroundFor/backgroundIndexFor selectors, and no code may reference the
+    // old array.
+    assert.ok(!/this\.backgroundImages/.test(script),
+        'this.backgroundImages must not be referenced');
+    assert.ok(/backgroundIndexFor\s*\(/.test(script),
+        'backgroundIndexFor must be defined');
+    assert.ok(/async backgroundFor\s*\(/.test(script),
+        'backgroundFor must be defined');
+    assert.ok(/this\.backgroundFor\(actualIndex\)/.test(script),
+        'batch generation must route through backgroundFor(actualIndex)');
+    assert.ok(/this\.backgroundFor\(\)/.test(script),
+        'Generate Current must route through backgroundFor()');
+    assert.ok(/if\s*\(this\.currentBackgroundImage\)/.test(script),
+        'drawBackgroundWithEffects must branch on this.currentBackgroundImage');
+    assert.ok(!/currentBackgroundIndex\s*<\s*backgroundImages/.test(script),
+        'drawBackgroundWithEffects must not compare currentBackgroundIndex against a backgroundImages length');
+    assert.ok(/outputIndex\s*%\s*count/.test(script),
+        'backgroundIndexFor must keep the actualIndex % count batch rule');
+});
