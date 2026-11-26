@@ -610,6 +610,9 @@ class QuoteCanvas {
     toggleTheme() {
         this.isDarkTheme = !this.isDarkTheme;
         document.body.classList.toggle('dark-theme', this.isDarkTheme);
+        // Mirror on <html> as well: theme-init.js sets it before first paint, and
+        // leaving it behind would keep the dark html-level gradient in light mode.
+        document.documentElement.classList.toggle('dark-theme', this.isDarkTheme);
         this.themeToggle.textContent = this.isDarkTheme ? '☀️' : '🌙';
         this.themeToggle.setAttribute('aria-pressed', String(this.isDarkTheme));
         this.settings.theme = this.isDarkTheme ? 'dark' : 'light';
@@ -856,14 +859,18 @@ class QuoteCanvas {
     }
     
     applySettings() {
-        // Apply theme (dark is the default)
+        // Apply theme (dark is the default). theme-init.js may already have put
+        // the class on <html> for the first paint, so mirror the state there too:
+        // otherwise a later switch to light keeps the dark html-level gradient.
         if (this.settings.theme === 'dark') {
             this.isDarkTheme = true;
             document.body.classList.add('dark-theme');
+            document.documentElement.classList.add('dark-theme');
             this.themeToggle.textContent = '☀️';
         } else {
             this.isDarkTheme = false;
             document.body.classList.remove('dark-theme');
+            document.documentElement.classList.remove('dark-theme');
             this.themeToggle.textContent = '🌙';
         }
         this.themeToggle.setAttribute('aria-pressed', String(this.isDarkTheme));
