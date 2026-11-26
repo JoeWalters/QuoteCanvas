@@ -1327,13 +1327,20 @@ class QuoteCanvas {
             thumbnail.classList.add('selected');
             this.currentBackgroundIndex = index;
             
-            // Load the full image for preview
+            // Load the full image for preview. A second click can land while this
+            // load is still in flight, so only adopt the result if this click is
+            // still the selection when it resolves -- otherwise the preview would
+            // show a background the UI no longer marks as selected.
             try {
-                this.currentBackgroundImage = await this.backgroundFor();
-                this.updatePreview();
+                const image = await this.backgroundFor();
+                if (this.currentBackgroundIndex !== index) return;
+                this.currentBackgroundImage = image;
             } catch (error) {
                 console.error('Error loading background for preview:', error);
+                if (this.currentBackgroundIndex !== index) return;
+                this.currentBackgroundImage = null;
             }
+            this.updatePreview();
         });
         
         const removeBtn = document.createElement('button');
@@ -1342,7 +1349,11 @@ class QuoteCanvas {
         removeBtn.title = 'Remove background';
         removeBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            await this.removeBackground(index);
+            try {
+                await this.removeBackground(index);
+            } catch (error) {
+                console.error('Error removing background:', error);
+            }
         });
         
         // The creation-time default is "the selected one", not "the first one":
@@ -2544,8 +2555,15 @@ class QuoteCanvas {
             }
         }
         
-        // Restore the preview image so the selection and canvas cannot disagree
-        this.currentBackgroundImage = await this.backgroundFor();
+        // Restore the preview image so the selection and canvas cannot disagree.
+        // A failed decode leaves nothing to paint, which is the honest state: the
+        // solid fallback rather than the image the user just removed.
+        try {
+            this.currentBackgroundImage = await this.backgroundFor();
+        } catch (error) {
+            console.error('Error restoring background preview:', error);
+            this.currentBackgroundImage = null;
+        }
     }
 
     toggleFontStyle(style) {
