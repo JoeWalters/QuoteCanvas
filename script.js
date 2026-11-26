@@ -1,6 +1,12 @@
 // App version - updated automatically by GitHub Actions
 const APP_VERSION = 'dev';
 
+// Preview zoom: 50%–300% in 10% steps, 100% is the untouched default.
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 3;
+const ZOOM_STEP = 0.1;
+const ZOOM_DEFAULT = 1;
+
 // ---- Pure filename helpers (module scope; used by the app and by node:test) ----
 
 function formatDate(date, format) {
@@ -131,7 +137,7 @@ function dedupeZipNames(items) {
 class QuoteCanvas {
     constructor() {
         this.quotes = [];
-        this.backgroundImages = [];
+        this.currentBackgroundImage = null;
         this.backgroundImageFiles = [];
         this.currentQuoteIndex = 0;
         this.currentBackgroundIndex = 0;
@@ -142,7 +148,8 @@ class QuoteCanvas {
         
         // New properties for enhanced features
         this.currentTab = 'content-tab';
-        this.zoomLevel = 1;
+        this.zoomLevel = ZOOM_DEFAULT;
+        this.zoomLevelEl = document.getElementById('zoom-level');
         this.isDarkTheme = true;
         this.isTouchMode = false;
         this.isGenerating = false;
@@ -285,7 +292,8 @@ class QuoteCanvas {
         // Enhanced preview controls
         this.zoomInBtn = document.getElementById('zoom-in');
         this.zoomOutBtn = document.getElementById('zoom-out');
-        this.zoomLevel = document.getElementById('zoom-level');
+        this.zoomLevelEl = document.getElementById('zoom-level');
+        this.zoomResetBtn = document.getElementById('zoom-reset');
         this.fullscreenBtn = document.getElementById('fullscreen-preview');
         this.comparisonBtn = document.getElementById('comparison-mode');
         this.comparisonCanvas = document.getElementById('comparison-canvas');
@@ -447,8 +455,9 @@ class QuoteCanvas {
         });
         
         // Enhanced preview controls
-        this.zoomInBtn.addEventListener('click', () => this.adjustZoom(0.1));
-        this.zoomOutBtn.addEventListener('click', () => this.adjustZoom(-0.1));
+        this.zoomInBtn.addEventListener('click', () => this.adjustZoom(ZOOM_STEP));
+        this.zoomOutBtn.addEventListener('click', () => this.adjustZoom(-ZOOM_STEP));
+        this.zoomResetBtn.addEventListener('click', () => this.resetZoom());
         this.fullscreenBtn.addEventListener('click', () => this.toggleFullscreen());
         this.comparisonBtn.addEventListener('click', () => this.toggleComparison());
         
@@ -724,40 +733,52 @@ class QuoteCanvas {
     
     // Enhanced preview controls
     adjustZoom(delta) {
-        this.zoomLevel = Math.max(0.5, Math.min(3, this.zoomLevel + delta));
-        this.zoomLevel.textContent = Math.round(this.zoomLevel * 100) + '%';
+        const next = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, this.zoomLevel + delta));
+        this.zoomLevel = Math.round(next * 1000) / 1000;
+        this.zoomLevelEl.textContent = Math.round(this.zoomLevel * 100) + '%';
         this.applyZoom();
     }
-    
+
     applyZoom() {
         const canvas = this.previewCanvas;
-        canvas.style.transform = `scale(${this.zoomLevel})`;
+        canvas.style.transform = this.zoomLevel === ZOOM_DEFAULT ? '' : `scale(${this.zoomLevel})`;
         canvas.style.transformOrigin = 'center center';
     }
-    
+
+    resetZoom() {
+        this.zoomLevel = ZOOM_DEFAULT;
+        this.zoomLevelEl.textContent = '100%';
+        this.applyZoom();
+    }
+
     toggleFullscreen() {
-        if (document.fullscreenElement) {
-            document.exitFullscreen();
-        } else {
-            const overlay = document.createElement('div');
-            overlay.className = 'fullscreen-overlay';
-            
-            const canvas = this.previewCanvas.cloneNode();
-            canvas.className = 'fullscreen-canvas';
-            
-            const closeBtn = document.createElement('button');
-            closeBtn.className = 'fullscreen-close';
-            closeBtn.textContent = '×';
-            closeBtn.onclick = () => document.body.removeChild(overlay);
-            
-            overlay.appendChild(canvas);
-            overlay.appendChild(closeBtn);
-            document.body.appendChild(overlay);
-            
-            // Copy current canvas content
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(this.previewCanvas, 0, 0);
-        }
+        const trigger = document.activeElement;
+        const dialog = document.createElement('dialog');
+        dialog.className = 'fullscreen-dialog';
+
+        const canvas = document.createElement('canvas');
+        canvas.className = 'fullscreen-dialog-canvas';
+        canvas.width = this.previewCanvas.width;
+        canvas.height = this.previewCanvas.height;
+        canvas.setAttribute('role', 'img');
+        canvas.setAttribute('aria-label', 'Full-size preview of the current quote');
+        canvas.getContext('2d').drawImage(this.previewCanvas, 0, 0);
+
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'fullscreen-close';
+        closeBtn.textContent = '×';
+        closeBtn.setAttribute('aria-label', 'Close full-size preview');
+        closeBtn.addEventListener('click', () => dialog.close());
+
+        dialog.append(canvas, closeBtn);
+        dialog.addEventListener('close', () => {
+            dialog.remove();
+            if (trigger && typeof trigger.focus === 'function' && trigger.isConnected) trigger.focus();
+        });
+        document.body.appendChild(dialog);
+        dialog.showModal();
+        closeBtn.focus();
     }
     
     toggleComparison() {
@@ -765,6 +786,7 @@ class QuoteCanvas {
         const isVisible = comparison.style.display !== 'none';
         
         comparison.style.display = isVisible ? 'none' : 'block';
+        this.comparisonBtn.setAttribute('aria-pressed', String(!isVisible));
         this.comparisonBtn.textContent = isVisible ? '👁️‍🗨️' : '👁️';
         
         if (!isVisible) {
@@ -1118,7 +1140,8 @@ class QuoteCanvas {
     
     // Keyboard shortcuts
     handleKeyboardShortcuts(e) {
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        const target = e.target;
+        if (target && target.closest && target.closest('input, textarea, select, button, a[href], [contenteditable="true"]')) return;
         
         switch(e.code) {
             case 'Space':
@@ -1232,7 +1255,7 @@ class QuoteCanvas {
         
         // Store file references instead of loading all images into memory
         this.backgroundImageFiles = [];
-        this.backgroundImages = []; // Keep for compatibility but will be populated on-demand
+        this.currentBackgroundImage = null; // Reset preview state before loading new files
         this.backgroundPreview.innerHTML = '';
         this.imageCache.clear(); // Clear existing cache
         
@@ -1261,8 +1284,7 @@ class QuoteCanvas {
             
             // Load the first image for preview
             try {
-                const firstImg = await this.loadImageFromFile(this.backgroundImageFiles[0]);
-                this.backgroundImages = [firstImg]; // Store only one for preview
+                this.currentBackgroundImage = await this.backgroundFor();
                 this.updatePreview();
             } catch (error) {
                 console.error('Error loading first background for preview:', error);
@@ -1305,26 +1327,39 @@ class QuoteCanvas {
             thumbnail.classList.add('selected');
             this.currentBackgroundIndex = index;
             
-            // Load the full image for preview
+            // Load the full image for preview. A second click can land while this
+            // load is still in flight, so only adopt the result if this click is
+            // still the selection when it resolves -- otherwise the preview would
+            // show a background the UI no longer marks as selected.
             try {
-                const fullImg = await this.loadImageFromCache(index);
-                this.backgroundImages = [fullImg]; // Replace array with just current image
-                this.updatePreview();
+                const image = await this.backgroundFor();
+                if (this.currentBackgroundIndex !== index) return;
+                this.currentBackgroundImage = image;
             } catch (error) {
                 console.error('Error loading background for preview:', error);
+                if (this.currentBackgroundIndex !== index) return;
+                this.currentBackgroundImage = null;
             }
+            this.updatePreview();
         });
         
         const removeBtn = document.createElement('button');
         removeBtn.className = 'remove-background-btn';
         removeBtn.innerHTML = '×';
         removeBtn.title = 'Remove background';
-        removeBtn.addEventListener('click', (e) => {
+        removeBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            this.removeBackground(index);
+            try {
+                await this.removeBackground(index);
+            } catch (error) {
+                console.error('Error removing background:', error);
+            }
         });
         
-        if (index === 0) {
+        // The creation-time default is "the selected one", not "the first one":
+        // hard-coding index 0 here leaves two thumbnails selected after a removal
+        // moves the selection off 0.
+        if (index === this.currentBackgroundIndex) {
             thumbnail.classList.add('selected');
         }
         
@@ -1338,6 +1373,7 @@ class QuoteCanvas {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             const img = new Image();
+            const objectUrl = URL.createObjectURL(file);
             
             img.onload = () => {
                 // Calculate thumbnail dimensions
@@ -1365,10 +1401,14 @@ class QuoteCanvas {
                 // Clean up
                 canvas.width = 1;
                 canvas.height = 1;
+                URL.revokeObjectURL(objectUrl);
             };
             
-            img.onerror = reject;
-            img.src = URL.createObjectURL(file);
+            img.onerror = (err) => {
+                URL.revokeObjectURL(objectUrl);
+                reject(err);
+            };
+            img.src = objectUrl;
         });
     }
 
@@ -1422,6 +1462,23 @@ class QuoteCanvas {
         
         this.imageCache.set(index, img);
         return img;
+    }
+
+    // Which background an output uses. `outputIndex` undefined means "the one the
+    // user has selected" (preview, Generate Current); an explicit index cycles
+    // through every uploaded background (Generate All), as it always has.
+    backgroundIndexFor(outputIndex) {
+        const count = this.backgroundImageFiles.length;
+        if (count === 0) return null;
+        if (outputIndex === undefined || outputIndex === null) {
+            return Math.min(Math.max(this.currentBackgroundIndex, 0), count - 1);
+        }
+        return outputIndex % count;
+    }
+
+    async backgroundFor(outputIndex) {
+        const index = this.backgroundIndexFor(outputIndex);
+        return index === null ? null : this.loadImageFromCache(index);
     }
 
     updateQuoteDisplay() {
@@ -1506,8 +1563,8 @@ class QuoteCanvas {
     
     drawBackgroundWithEffects(ctx, width, height, skipEffects = false) {
         // Draw background image or solid color
-        if (this.backgroundImages.length > 0 && this.currentBackgroundIndex < this.backgroundImages.length) {
-            const bgImg = this.backgroundImages[this.currentBackgroundIndex];
+        if (this.currentBackgroundImage) {
+            const bgImg = this.currentBackgroundImage;
             
             if (!skipEffects) {
                 // Apply filters
@@ -1850,11 +1907,10 @@ class QuoteCanvas {
                 // Calculate which background to use
                 let backgroundImg = null;
                 if (this.backgroundImageFiles.length > 0) {
-                    const backgroundIndex = actualIndex % this.backgroundImageFiles.length;
                     try {
-                        backgroundImg = await this.loadImageFromCache(backgroundIndex);
+                        backgroundImg = await this.backgroundFor(actualIndex);
                     } catch (error) {
-                        console.warn(`Failed to load background ${backgroundIndex}:`, error);
+                        console.warn('Failed to load background:', error);
                     }
                 }
                 
@@ -2126,7 +2182,7 @@ class QuoteCanvas {
         let backgroundImg = null;
         if (this.backgroundImageFiles.length > 0) {
             try {
-                backgroundImg = await this.loadImageFromCache(this.currentBackgroundIndex);
+                backgroundImg = await this.backgroundFor();
             } catch (error) {
                 console.warn('Failed to load background for current image:', error);
             }
@@ -2241,10 +2297,15 @@ class QuoteCanvas {
         info.style.background = 'rgba(0,0,0,0.7)';
         info.style.padding = '10px';
         info.style.borderRadius = '5px';
-        info.innerHTML = `
-            <strong>${imageData.filename}</strong><br>
-            <em>${imageData.quote.substring(0, 100)}${imageData.quote.length > 100 ? '...' : ''}</em>
-        `;
+        const infoName = document.createElement('strong');
+        infoName.textContent = imageData.filename;
+        const infoQuote = document.createElement('em');
+        const rawQuote = String(imageData.quote ?? '');
+        infoQuote.textContent = rawQuote.substring(0, 100) + (rawQuote.length > 100 ? '...' : '');
+
+        info.appendChild(infoName);
+        info.appendChild(document.createElement('br'));
+        info.appendChild(infoQuote);
         
         overlay.appendChild(img);
         overlay.appendChild(closeBtn);
@@ -2426,7 +2487,7 @@ class QuoteCanvas {
         this.backgroundFilesLabel.classList.remove('file-uploaded');
     }
 
-    removeBackground(index) {
+    async removeBackground(index) {
         // Remove from file array and cache
         this.backgroundImageFiles.splice(index, 1);
         this.imageCache.delete(index);
@@ -2448,7 +2509,10 @@ class QuoteCanvas {
         }
         
         // Refresh the thumbnail display
-        this.refreshBackgroundThumbnails();
+        await this.refreshBackgroundThumbnails();
+        
+        // Reload the selected image so the preview matches the selection
+        this.currentBackgroundImage = await this.backgroundFor();
         
         // Update preview
         this.updatePreview();
@@ -2457,12 +2521,12 @@ class QuoteCanvas {
         if (this.backgroundImageFiles.length === 0) {
             this.backgroundControls.style.display = 'none';
             this.resetBackgroundFileStatus();
-            this.backgroundImages = [];
+            this.currentBackgroundImage = null;
         }
     }
 
     clearAllBackgrounds() {
-        this.backgroundImages = [];
+        this.currentBackgroundImage = null;
         this.backgroundImageFiles = [];
         this.imageCache.clear();
         this.currentBackgroundIndex = 0;
@@ -2485,9 +2549,20 @@ class QuoteCanvas {
         // Set the current background as selected
         if (this.backgroundImageFiles.length > 0) {
             const thumbnails = document.querySelectorAll('.background-thumbnail');
+            thumbnails.forEach(t => t.classList.remove('selected'));
             if (thumbnails[this.currentBackgroundIndex]) {
                 thumbnails[this.currentBackgroundIndex].classList.add('selected');
             }
+        }
+        
+        // Restore the preview image so the selection and canvas cannot disagree.
+        // A failed decode leaves nothing to paint, which is the honest state: the
+        // solid fallback rather than the image the user just removed.
+        try {
+            this.currentBackgroundImage = await this.backgroundFor();
+        } catch (error) {
+            console.error('Error restoring background preview:', error);
+            this.currentBackgroundImage = null;
         }
     }
 

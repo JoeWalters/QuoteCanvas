@@ -869,12 +869,23 @@ body.touch-mode .preview-controls button {
     padding: 20px;
     border-radius: 8px;
     justify-content: center;
+    flex-wrap: wrap;
+    overflow: hidden;
 }
 
 .preview-main, .preview-comparison {
     flex: 1;
     display: flex;
+    flex-direction: column;
+    align-items: center;
     justify-content: center;
+    min-width: 0;
+}
+
+.preview-label {
+    font-size: 0.8rem;
+    color: #666;
+    margin-bottom: 6px;
 }
 
 .preview-info {
@@ -1025,6 +1036,30 @@ body.touch-mode .preview-controls button {
     cursor: pointer;
 }
 
+.fullscreen-dialog {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    max-width: none;
+    max-height: none;
+    position: fixed;
+    /* the global `* { margin: 0 }` reset beats the UA's `dialog { margin: auto }`,
+       which is what centres a modal dialog */
+    margin: auto;
+}
+
+.fullscreen-dialog::backdrop {
+    background: rgba(0,0,0,0.9);
+}
+
+.fullscreen-dialog-canvas {
+    display: block;
+    max-width: 90vw;
+    max-height: 90vh;
+    width: auto;
+    height: auto;
+}
+
 /* Dark theme overrides */
 body.dark-theme .settings-panel,
 body.dark-theme .performance-panel {
@@ -1073,6 +1108,17 @@ body.dark-theme .quote-preview {
 }
 
 #preview-canvas {
+    max-width: 100%;
+    height: auto;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+/* The comparison canvas has no display size of its own (drawComparisonPreview
+   only sets its intrinsic size), so without this it paints at 1080px inside a
+   half-width pane and is clipped by #preview-container's overflow. */
+#comparison-canvas {
     max-width: 100%;
     height: auto;
     border: 1px solid #e0e0e0;

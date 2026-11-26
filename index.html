@@ -456,19 +456,22 @@
                             <button id="next-quote" class="nav-btn" disabled>Next →</button>
                         </div>
                         <div class="preview-view-controls">
-                            <button id="zoom-out" class="zoom-btn" aria-label="Zoom out">🔍-</button>
+                            <button id="zoom-out" class="zoom-btn" aria-label="Zoom out (minimum 50%)">🔍-</button>
                             <span id="zoom-level">100%</span>
-                            <button id="zoom-in" class="zoom-btn" aria-label="Zoom in">🔍+</button>
+                            <button id="zoom-in" class="zoom-btn" aria-label="Zoom in (maximum 300%)">🔍+</button>
+                            <button id="zoom-reset" class="zoom-btn" aria-label="Reset zoom to 100%">100%</button>
                             <button id="fullscreen-preview" class="view-btn" aria-label="Open fullscreen preview">⛶</button>
                             <button id="comparison-mode" class="view-btn" aria-label="Toggle comparison view" aria-pressed="false">👁️‍🗨️</button>
                         </div>
                     </div>
                     <div class="preview-container" id="preview-container">
                         <div class="preview-main">
-                            <canvas id="preview-canvas"></canvas>
+                            <span class="preview-label" id="preview-main-label">With effects</span>
+                            <canvas id="preview-canvas" aria-labelledby="preview-main-label"></canvas>
                         </div>
                         <div class="preview-comparison" id="preview-comparison" style="display: none;">
-                            <canvas id="comparison-canvas"></canvas>
+                            <span class="preview-label" id="preview-comparison-label">Without effects</span>
+                            <canvas id="comparison-canvas" aria-labelledby="preview-comparison-label"></canvas>
                         </div>
                     </div>
                     <div class="preview-info">
@@ -505,7 +508,9 @@
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"
+        integrity="sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg=="
+        crossorigin="anonymous"></script>
     <script src="script.js"></script>
 </body>
 </html>
