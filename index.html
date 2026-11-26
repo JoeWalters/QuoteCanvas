@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QuoteCanvas - Generate Beautiful Quote Images</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="theme-init.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <meta name="theme-color" content="#667eea">
 </head>
@@ -80,22 +81,25 @@
         </div>
 
         <main>
-            <!-- Workflow navigation (also the progress indicator) -->
-            <nav class="progress-indicator step-progress" aria-label="Workflow steps">
+            <!-- Workflow navigation (also the progress indicator). WAI-ARIA tabs
+                 pattern with automatic activation: Left/Right/Home/End move focus
+                 and activate the target tab; roving tabindex keeps only the active
+                 tab in the tab sequence. -->
+            <nav class="progress-indicator step-progress" role="tablist" aria-label="Workflow steps">
                 <div class="progress-line"></div>
-                <button type="button" class="step-item active" data-tab="content-tab" aria-current="step">
+                <button type="button" class="step-item active" data-tab="content-tab" role="tab" id="step-content-tab" aria-controls="content-tab" aria-selected="true" tabindex="0" aria-current="step">
                     <span class="step-number">1</span>
                     <span class="step-label">Content</span>
                 </button>
-                <button type="button" class="step-item" data-tab="design-tab">
+                <button type="button" class="step-item" data-tab="design-tab" role="tab" id="step-design-tab" aria-controls="design-tab" aria-selected="false" tabindex="-1">
                     <span class="step-number">2</span>
                     <span class="step-label">Design</span>
                 </button>
-                <button type="button" class="step-item" data-tab="effects-tab">
+                <button type="button" class="step-item" data-tab="effects-tab" role="tab" id="step-effects-tab" aria-controls="effects-tab" aria-selected="false" tabindex="-1">
                     <span class="step-number">3</span>
                     <span class="step-label">Effects</span>
                 </button>
-                <button type="button" class="step-item" data-tab="export-tab">
+                <button type="button" class="step-item" data-tab="export-tab" role="tab" id="step-export-tab" aria-controls="export-tab" aria-selected="false" tabindex="-1">
                     <span class="step-number">4</span>
                     <span class="step-label">Generate</span>
                 </button>
@@ -106,7 +110,7 @@
             <div class="workspace-content">
 
             <!-- Content Tab -->
-            <div class="tab-content active" id="content-tab">
+            <div class="tab-content active" id="content-tab" role="tabpanel" aria-labelledby="step-content-tab">
                 <!-- File Upload Section -->
                 <section class="upload-section">
                 <h2>Upload Your Content</h2>
@@ -145,7 +149,7 @@
             </div>
 
             <!-- Design Tab -->
-            <div class="tab-content" id="design-tab">
+            <div class="tab-content" id="design-tab" role="tabpanel" aria-labelledby="step-design-tab">
                 <!-- Customization Section -->
             <section class="customization-section">
                 <h2>Customize Your Images</h2>
@@ -256,9 +260,11 @@
 
             <!-- Naming Scheme Section -->
             <section class="naming-section">
-                <h2 class="accordion-header" id="naming-header">
-                    <span>Photo Naming Scheme <small class="accordion-hint">(click to expand)</small></span>
-                    <span class="accordion-icon">▼</span>
+                <h2 class="accordion-heading">
+                    <button type="button" class="accordion-header" id="naming-header" aria-expanded="false" aria-controls="naming-content">
+                        <span>Photo Naming Scheme <small class="accordion-hint">(click to expand)</small></span>
+                        <span class="accordion-icon">▼</span>
+                    </button>
                 </h2>
                 <div class="accordion-content" id="naming-content">
                     <div class="controls-grid">
@@ -308,7 +314,7 @@
             </div>
 
             <!-- Effects Tab -->
-            <div class="tab-content" id="effects-tab">
+            <div class="tab-content" id="effects-tab" role="tabpanel" aria-labelledby="step-effects-tab">
                 <!-- Background Effects Section -->
                 <section class="effects-section">
                     <h2>Background Effects & Filters</h2>
@@ -372,7 +378,7 @@
             </div>
 
             <!-- Export Tab -->
-            <div class="tab-content" id="export-tab">
+            <div class="tab-content" id="export-tab" role="tabpanel" aria-labelledby="step-export-tab">
                 <!-- Export Options Section -->
                 <section class="export-section">
                     <h2>Export Format Options</h2>
@@ -422,10 +428,10 @@
                     </div>
                     <div class="progress-container" id="progress-container" style="display: none;">
                         <div class="progress-info">
-                            <span id="progress-text">0%</span>
+                            <span id="progress-text" aria-live="polite">0%</span>
                             <span id="progress-details">Starting...</span>
                         </div>
-                        <div class="progress-bar">
+                        <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-labelledby="progress-text">
                             <div class="progress-fill" id="progress-fill"></div>
                         </div>
                         <div class="progress-actions">
