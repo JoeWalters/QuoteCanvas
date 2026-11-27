@@ -254,6 +254,7 @@ class QuoteCanvas {
         this.progressContainer = document.getElementById('progress-container');
         this.progressFill = document.getElementById('progress-fill');
         this.progressText = document.getElementById('progress-text');
+        this.progressBar = document.querySelector('.progress-bar');
         
         // Results
         this.resultsSection = document.getElementById('results-section');
@@ -288,6 +289,7 @@ class QuoteCanvas {
         // Workflow navigation (the step buttons are also the tabs)
         this.tabBtns = document.querySelectorAll('[data-tab]');
         this.tabContents = document.querySelectorAll('.tab-content');
+        this.tablist = document.querySelector('.step-progress');
         
         // Enhanced preview controls
         this.zoomInBtn = document.getElementById('zoom-in');
@@ -433,6 +435,11 @@ class QuoteCanvas {
             btn.addEventListener('click', (e) => this.switchTab(e.currentTarget.dataset.tab));
         });
 
+        // WAI-ARIA tabs pattern: automatic activation — Left/Right/Home/End
+        // move focus and activate the target tab (the keydown listener lives
+        // on the tablist so the events bubble from the focused tab button).
+        this.tablist.addEventListener('keydown', (e) => this.handleTabKeydown(e));
+
         // Design persistence: one listener covers every saved control.
         this.designFields.forEach((id) => {
             const el = document.getElementById(id);
@@ -543,24 +550,8 @@ class QuoteCanvas {
         this.previewCanvas.width = width;
         this.previewCanvas.height = height;
         
-        // Scale canvas for display while maintaining aspect ratio
-        const maxDisplaySize = 500;
-        const aspectRatio = width / height;
-        
-        let displayWidth, displayHeight;
-        
-        if (width > height) {
-            // Landscape orientation
-            displayWidth = Math.min(width, maxDisplaySize);
-            displayHeight = displayWidth / aspectRatio;
-        } else {
-            // Portrait orientation
-            displayHeight = Math.min(height, maxDisplaySize);
-            displayWidth = displayHeight * aspectRatio;
-        }
-        
-        this.previewCanvas.style.width = displayWidth + 'px';
-        this.previewCanvas.style.height = displayHeight + 'px';
+        // Display sizing is CSS's job: #preview-canvas uses max-width + height:auto
+        // so the intrinsic ratio (canvas.width/height) survives at any viewport width.
     }
 
     // Naming scheme functionality
@@ -611,6 +602,7 @@ class QuoteCanvas {
                 this.namingContent.classList.add('active');
                 this.namingHeader.classList.add('active');
             }
+            this.namingHeader.setAttribute('aria-expanded', String(!isActive));
         }
     }
     
@@ -618,6 +610,9 @@ class QuoteCanvas {
     toggleTheme() {
         this.isDarkTheme = !this.isDarkTheme;
         document.body.classList.toggle('dark-theme', this.isDarkTheme);
+        // Mirror on <html> as well: theme-init.js sets it before first paint, and
+        // leaving it behind would keep the dark html-level gradient in light mode.
+        document.documentElement.classList.toggle('dark-theme', this.isDarkTheme);
         this.themeToggle.textContent = this.isDarkTheme ? '☀️' : '🌙';
         this.themeToggle.setAttribute('aria-pressed', String(this.isDarkTheme));
         this.settings.theme = this.isDarkTheme ? 'dark' : 'light';
@@ -650,9 +645,13 @@ class QuoteCanvas {
         this.tabBtns.forEach(btn => {
             btn.classList.remove('active');
             btn.removeAttribute('aria-current');
+            btn.setAttribute('aria-selected', 'false');
+            btn.setAttribute('tabindex', '-1');
         });
         target.classList.add('active');
         target.setAttribute('aria-current', 'step');
+        target.setAttribute('aria-selected', 'true');
+        target.setAttribute('tabindex', '0');
         
         // Update content
         this.tabContents.forEach(content => content.classList.remove('active'));
@@ -668,6 +667,26 @@ class QuoteCanvas {
         if (tabId === 'export-tab') {
             setTimeout(() => this.updatePreview(), 100);
         }
+    }
+    
+    // WAI-ARIA tabs keyboard support (automatic activation): Left/Right wrap
+    // around, Home/End jump to the first/last tab; the new tab is focused.
+    handleTabKeydown(e) {
+        const keys = ['ArrowRight', 'ArrowLeft', 'Home', 'End'];
+        if (!keys.includes(e.key)) return;
+        const tabs = [...this.tabBtns];
+        const currentIndex = tabs.findIndex(t => t.classList.contains('active'));
+        let newIndex;
+        switch (e.key) {
+            case 'ArrowRight': newIndex = (currentIndex + 1) % tabs.length; break;
+            case 'ArrowLeft': newIndex = (currentIndex - 1 + tabs.length) % tabs.length; break;
+            case 'Home': newIndex = 0; break;
+            case 'End': newIndex = tabs.length - 1; break;
+        }
+        e.preventDefault();
+        const tab = tabs[newIndex];
+        this.switchTab(tab.dataset.tab);
+        tab.focus();
     }
     
     updateProgressIndicator(activeTabId) {
@@ -840,14 +859,18 @@ class QuoteCanvas {
     }
     
     applySettings() {
-        // Apply theme (dark is the default)
+        // Apply theme (dark is the default). theme-init.js may already have put
+        // the class on <html> for the first paint, so mirror the state there too:
+        // otherwise a later switch to light keeps the dark html-level gradient.
         if (this.settings.theme === 'dark') {
             this.isDarkTheme = true;
             document.body.classList.add('dark-theme');
+            document.documentElement.classList.add('dark-theme');
             this.themeToggle.textContent = '☀️';
         } else {
             this.isDarkTheme = false;
             document.body.classList.remove('dark-theme');
+            document.documentElement.classList.remove('dark-theme');
             this.themeToggle.textContent = '🌙';
         }
         this.themeToggle.setAttribute('aria-pressed', String(this.isDarkTheme));
@@ -1140,6 +1163,8 @@ class QuoteCanvas {
     
     // Keyboard shortcuts
     handleKeyboardShortcuts(e) {
+        // Leave Cmd/Opt+anything to the OS/browser (e.g. Cmd+R must reload).
+        if (e.altKey || e.metaKey) return;
         const target = e.target;
         if (target && target.closest && target.closest('input, textarea, select, button, a[href], [contenteditable="true"]')) return;
         
@@ -1164,12 +1189,6 @@ class QuoteCanvas {
                 if (e.ctrlKey) {
                     e.preventDefault();
                     this.toggleFullscreen();
-                }
-                break;
-            case 'KeyR':
-                if (e.ctrlKey) {
-                    e.preventDefault();
-                    this.goToRandomQuote();
                 }
                 break;
         }
@@ -1851,6 +1870,7 @@ class QuoteCanvas {
         
         this.showGenerationUI(true);
         this.releaseGeneratedImages();
+        this.resetProgressAria();
         
         try {
             await this.ensureFontLoaded();
@@ -1859,10 +1879,12 @@ class QuoteCanvas {
                 this.displayResults();
             } else {
                 this.progressDetails.textContent = `⏹️ Cancelled — 0 of ${totalQuotes} generated`;
+                this.resetProgressAria();
             }
         } catch (error) {
             console.error('Generation failed:', error);
             this.progressDetails.textContent = 'Generation failed: ' + error.message;
+            this.resetProgressAria();
         } finally {
             // Leave the progress container visible so the cancelled/failed/success
             // summary is actually readable; `showGenerationSummary` hides it after 5s
@@ -1984,12 +2006,20 @@ class QuoteCanvas {
     
     updateGenerationProgress(current, total, currentQuote) {
         const progress = (current / total) * 100;
+        const rounded = Math.round(progress);
         this.progressFill.style.width = progress + '%';
-        this.progressText.textContent = Math.round(progress) + '%';
+        this.progressText.textContent = rounded + '%';
+        this.progressBar.setAttribute('aria-valuenow', String(rounded));
+        this.progressBar.setAttribute('aria-valuetext', `${rounded}% (${current}/${total})`);
         
         const truncatedQuote = currentQuote.length > 50 ? 
             currentQuote.substring(0, 50) + '...' : currentQuote;
         this.progressDetails.textContent = `Processing: "${truncatedQuote}" (${current}/${total})`;
+    }
+    
+    resetProgressAria() {
+        this.progressBar.setAttribute('aria-valuenow', '0');
+        this.progressBar.setAttribute('aria-valuetext', '0%');
     }
     
     updateGenerationStats() {
@@ -2238,7 +2268,8 @@ class QuoteCanvas {
             
             const filename = document.createElement('small');
             filename.textContent = imageData.filename;
-            filename.style.color = '#999';
+            // #5f6b7a on #f8f9fa and #a9b6c4 on #2c3e50 both meet 4.5:1.
+            filename.style.color = document.body.classList.contains('dark-theme') ? '#a9b6c4' : '#5f6b7a';
             filename.style.display = 'block';
             filename.style.marginTop = '5px';
             

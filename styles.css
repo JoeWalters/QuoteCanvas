@@ -22,6 +22,13 @@ body.dark-theme {
     --border-color: #4a5568;
     color: #e0e0e0;
     background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    color-scheme: dark;
+}
+
+/* First paint: theme-init.js adds dark-theme to <html> before the app boots,
+   so a saved dark preference never flashes the light gradient on <body>. */
+html.dark-theme body {
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
 }
 
 body.dark-theme section {
@@ -544,6 +551,30 @@ section h2 {
 }
 
 /* Accordion Styles */
+/* The accordion header is a real <button> inside an h2 (focusable, toggles
+   with Enter/Space), so reset the button UA defaults while keeping the look. */
+.accordion-heading {
+    margin: 0;
+}
+
+button.accordion-header {
+    width: 100%;
+    border: 0;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+    border-radius: 6px;
+    padding: 15px 20px;
+    margin: -15px -20px 0 -20px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    transition: all 0.3s ease;
+}
+
 .accordion-header {
     cursor: pointer;
     display: flex;
@@ -596,8 +627,11 @@ section h2 {
 .accordion-hint {
     font-size: 14px;
     font-weight: 400;
-    color: #999;
-    opacity: 0.8;
+    color: #5f6b7a;
+}
+
+body.dark-theme .accordion-hint {
+    color: #a9b6c4;
 }
 
 /* Progress Indicator */
@@ -1097,6 +1131,64 @@ body.dark-theme .quote-preview {
     color: #bdc3c7;
 }
 
+/* Dark-theme control surfaces: nothing lighter than the #2c3e50 section bg,
+   so the dark mode has no light patches among results/progress/style/zoom/
+   view/action controls. Hover states stay in the dark #34495e family. */
+body.dark-theme .result-item {
+    background: #2c3e50;
+}
+
+body.dark-theme .progress-bar {
+    background: #2c3e50;
+}
+
+body.dark-theme .progress-fill {
+    background: linear-gradient(90deg, #3498db, #2980b9);
+}
+
+body.dark-theme .style-btn {
+    background: #2c3e50;
+    border-color: #4a5568;
+    color: #e0e0e0;
+}
+
+body.dark-theme .style-btn:hover {
+    background: #34495e;
+    border-color: #3498db;
+}
+
+body.dark-theme .style-btn.active {
+    background: #3498db;
+    border-color: #3498db;
+    color: white;
+}
+
+body.dark-theme .zoom-btn,
+body.dark-theme .view-btn,
+body.dark-theme .nav-btn {
+    background: #2c3e50;
+    border-color: #4a5568;
+    color: #e0e0e0;
+}
+
+body.dark-theme .zoom-btn:hover,
+body.dark-theme .view-btn:hover,
+body.dark-theme .nav-btn:hover {
+    background: #34495e;
+    border-color: #3498db;
+}
+
+body.dark-theme .action-btn {
+    background: #2c3e50;
+    border-color: #3498db;
+    color: #3498db;
+}
+
+body.dark-theme .action-btn:hover {
+    background: #3498db;
+    color: white;
+}
+
 /* Preview Section */
 .preview-container {
     display: flex;
@@ -1108,7 +1200,7 @@ body.dark-theme .quote-preview {
 }
 
 #preview-canvas {
-    max-width: 100%;
+    max-width: min(100%, 500px);
     height: auto;
     border: 1px solid #e0e0e0;
     border-radius: 8px;
